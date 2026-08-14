@@ -1,0 +1,558 @@
+{
+  "groups": [
+    {
+      "group_id": "api",
+      "categories": [
+        {
+          "questions": [
+            "API 등록은 어떻게 하나요?",
+            "API 등록 전에 그룹을 먼저 만들어야 하나요?",
+            "등록 후 반영까지 얼마나 걸리나요?"
+          ],
+          "category_id": "api_reg_flow",
+          "name": "API 등록 절차",
+          "group_id": "api",
+          "sort": 0,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "권한그룹은 무엇을 선택해야 하나요?",
+            "Path와 Method는 어떻게 입력하나요?",
+            "필수 입력 항목은 무엇인가요?",
+            "서비스와 그룹의 차이는 무엇인가요?"
+          ],
+          "category_id": "api_reg_field",
+          "name": "API 등록 항목 설명",
+          "group_id": "api",
+          "sort": 1,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "등록한 API가 목록에 안 보여요",
+            "저장 시 중복 경로 오류가 납니다"
+          ],
+          "category_id": "api_reg_err",
+          "name": "API 등록 오류",
+          "group_id": "api",
+          "sort": 2,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "빠른 등록과 일반 등록의 차이는?",
+            "빠른 등록에서 인증 설정을 바꿀 수 있나요?"
+          ],
+          "category_id": "api_quick",
+          "name": "빠른 API 등록",
+          "group_id": "api",
+          "sort": 3,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "등록한 API를 수정·삭제하려면?",
+            "운영 중인 API를 수정하면 바로 반영되나요?"
+          ],
+          "category_id": "api_edit",
+          "name": "API 수정·삭제",
+          "group_id": "api",
+          "sort": 4,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "배포 버튼이 활성화되지 않습니다",
+            "배포 이력은 어디서 보나요?"
+          ],
+          "category_id": "api_deploy",
+          "name": "API 배포",
+          "group_id": "api",
+          "sort": 5,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "Base URL은 어떤 형식으로 입력하나요?",
+            "포트가 다른 서버도 등록할 수 있나요?"
+          ],
+          "category_id": "api_endpoint",
+          "name": "엔드포인트 설정",
+          "group_id": "api",
+          "sort": 6,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "API Key와 OAuth 2.0 중 무엇을 쓰나요?",
+            "OAuth 스코프는 어디서 정의하나요?"
+          ],
+          "category_id": "api_auth",
+          "name": "인증 방식 설정",
+          "group_id": "api",
+          "sort": 7,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "Query와 Path 파라미터를 함께 쓸 수 있나요?",
+            "필수 파라미터 표시는 어떻게 하나요?"
+          ],
+          "category_id": "api_param",
+          "name": "파라미터 정의",
+          "group_id": "api",
+          "sort": 8,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "커스텀 헤더를 추가할 수 있나요?",
+            "CORS 허용 도메인은 어디서 설정하나요?"
+          ],
+          "category_id": "api_header",
+          "name": "헤더 / CORS",
+          "group_id": "api",
+          "sort": 9,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "v1, v2를 동시에 운영할 수 있나요?",
+            "구버전은 어떻게 폐기하나요?"
+          ],
+          "category_id": "api_version",
+          "name": "버전 관리",
+          "group_id": "api",
+          "sort": 10,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "\"작성중\" 상태는 무슨 의미인가요?",
+            "승인 요청은 누가 처리하나요?"
+          ],
+          "category_id": "api_status",
+          "name": "상태 / 승인",
+          "group_id": "api",
+          "sort": 11,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "등록 화면에서 바로 호출 테스트가 되나요?",
+            "테스트 결과 401이 반환됩니다"
+          ],
+          "category_id": "api_test",
+          "name": "테스트 호출",
+          "group_id": "api",
+          "sort": 12,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "호출 한도는 어디서 설정하나요?",
+            "한도를 초과하면 어떻게 되나요?"
+          ],
+          "category_id": "api_limit",
+          "name": "트래픽 / 쿼터",
+          "group_id": "api",
+          "sort": 13,
+          "enabled": true
+        }
+      ],
+      "group_name": "API 등록",
+      "sort": 0,
+      "enabled": true
+    },
+    {
+      "group_id": "spc",
+      "categories": [
+        {
+          "questions": [
+            "API 그룹(스펙)은 무엇인가요?",
+            "그룹 없이 API만 등록해도 되나요?"
+          ],
+          "category_id": "spc_concept",
+          "name": "API 그룹(스펙) 개념",
+          "group_id": "spc",
+          "sort": 0,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "그룹 등록 시 필수 항목은?",
+            "그룹 ID 규칙이 있나요?"
+          ],
+          "category_id": "spc_create",
+          "name": "그룹 생성 절차",
+          "group_id": "spc",
+          "sort": 1,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "Swagger YAML로 한 번에 등록할 수 있나요?",
+            "OAS 3.0만 지원하나요?"
+          ],
+          "category_id": "spc_oas",
+          "name": "OAS / Swagger 일괄 등록",
+          "group_id": "spc",
+          "sort": 2,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "YAML 파싱 오류가 납니다",
+            "일부 API만 등록되고 나머지가 누락됩니다"
+          ],
+          "category_id": "spc_import_err",
+          "name": "일괄 등록 오류",
+          "group_id": "spc",
+          "sort": 3,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "그룹을 삭제하면 하위 API는 어떻게 되나요?",
+            "삭제한 그룹을 복구할 수 있나요?"
+          ],
+          "category_id": "spc_delete",
+          "name": "그룹 삭제",
+          "group_id": "spc",
+          "sort": 4,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "다른 그룹으로 API를 옮길 수 있나요?"
+          ],
+          "category_id": "spc_move",
+          "name": "API 소속 변경",
+          "group_id": "spc",
+          "sort": 5,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "그룹 문서가 포털에 안 보입니다",
+            "문서 설명 문구는 어디서 수정하나요?"
+          ],
+          "category_id": "spc_doc",
+          "name": "포털 문서 노출",
+          "group_id": "spc",
+          "sort": 6,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "그룹별로 접근 권한을 나눌 수 있나요?"
+          ],
+          "category_id": "spc_perm",
+          "name": "그룹 권한",
+          "group_id": "spc",
+          "sort": 7,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "태그는 몇 개까지 붙일 수 있나요?"
+          ],
+          "category_id": "spc_tag",
+          "name": "태그 / 분류",
+          "group_id": "spc",
+          "sort": 8,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "운영·개발 서버를 함께 표기할 수 있나요?"
+          ],
+          "category_id": "spc_server",
+          "name": "서버 정보(servers)",
+          "group_id": "spc",
+          "sort": 9,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "공통 모델을 재사용할 수 있나요?"
+          ],
+          "category_id": "spc_schema",
+          "name": "스키마 / 모델",
+          "group_id": "spc",
+          "sort": 10,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "등록된 그룹을 YAML로 내려받을 수 있나요?"
+          ],
+          "category_id": "spc_export",
+          "name": "스펙 내보내기",
+          "group_id": "spc",
+          "sort": 11,
+          "enabled": true
+        }
+      ],
+      "group_name": "API 그룹(스펙)",
+      "sort": 1,
+      "enabled": true
+    },
+    {
+      "group_id": "tmplt",
+      "categories": [
+        {
+          "questions": [
+            "템플릿은 어디서 만드나요?",
+            "템플릿과 그룹은 어떻게 다른가요?"
+          ],
+          "category_id": "tmplt_concept",
+          "name": "템플릿 개념",
+          "group_id": "tmplt",
+          "sort": 0,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "템플릿 등록 시 필수 항목은?"
+          ],
+          "category_id": "tmplt_create",
+          "name": "템플릿 등록",
+          "group_id": "tmplt",
+          "sort": 1,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "템플릿을 수정하려면?",
+            "수정하면 기존 API에도 반영되나요?"
+          ],
+          "category_id": "tmplt_edit",
+          "name": "템플릿 수정",
+          "group_id": "tmplt",
+          "sort": 2,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "템플릿으로 API를 등록하는 방법은?",
+            "템플릿 값 일부만 바꿔 등록할 수 있나요?"
+          ],
+          "category_id": "tmplt_apply",
+          "name": "템플릿으로 API 등록",
+          "group_id": "tmplt",
+          "sort": 3,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "불러오기 목록에 템플릿이 안 보입니다"
+          ],
+          "category_id": "tmplt_load",
+          "name": "템플릿 불러오기",
+          "group_id": "tmplt",
+          "sort": 4,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "다른 부서와 템플릿을 공유할 수 있나요?"
+          ],
+          "category_id": "tmplt_share",
+          "name": "템플릿 공유",
+          "group_id": "tmplt",
+          "sort": 5,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "사용 중인 템플릿을 삭제할 수 있나요?"
+          ],
+          "category_id": "tmplt_delete",
+          "name": "템플릿 삭제",
+          "group_id": "tmplt",
+          "sort": 6,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "템플릿에 변수를 넣을 수 있나요?"
+          ],
+          "category_id": "tmplt_var",
+          "name": "치환 변수",
+          "group_id": "tmplt",
+          "sort": 7,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "이전 버전 템플릿으로 되돌릴 수 있나요?"
+          ],
+          "category_id": "tmplt_ver",
+          "name": "템플릿 버전",
+          "group_id": "tmplt",
+          "sort": 8,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "부서 기본 템플릿을 지정할 수 있나요?"
+          ],
+          "category_id": "tmplt_default",
+          "name": "기본 템플릿 지정",
+          "group_id": "tmplt",
+          "sort": 9,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "템플릿 적용 후 저장이 실패합니다"
+          ],
+          "category_id": "tmplt_err",
+          "name": "템플릿 적용 오류",
+          "group_id": "tmplt",
+          "sort": 10,
+          "enabled": true
+        }
+      ],
+      "group_name": "템플릿 관리",
+      "sort": 2,
+      "enabled": true
+    },
+    {
+      "group_id": "auth",
+      "categories": [
+        {
+          "questions": [
+            "권한그룹은 무엇을 선택해야 하나요?",
+            "권한그룹을 새로 만들 수 있나요?"
+          ],
+          "category_id": "auth_group",
+          "name": "권한그룹 설정",
+          "group_id": "auth",
+          "sort": 0,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "관리자와 등록자의 차이는?"
+          ],
+          "category_id": "auth_role",
+          "name": "역할(Role) 구분",
+          "group_id": "auth",
+          "sort": 1,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "등록 권한은 어디서 신청하나요?"
+          ],
+          "category_id": "auth_apply",
+          "name": "권한 신청",
+          "group_id": "auth",
+          "sort": 2,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "API Key는 어디서 발급하나요?",
+            "발급한 Key를 재발급할 수 있나요?"
+          ],
+          "category_id": "auth_key",
+          "name": "API Key 발급",
+          "group_id": "auth",
+          "sort": 3,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "Key 만료 기간을 늘릴 수 있나요?"
+          ],
+          "category_id": "auth_expire",
+          "name": "만료 / 회수",
+          "group_id": "auth",
+          "sort": 4,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "특정 IP만 허용할 수 있나요?"
+          ],
+          "category_id": "auth_ip",
+          "name": "IP 접근 제어",
+          "group_id": "auth",
+          "sort": 5,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "SSO 로그인이 실패합니다"
+          ],
+          "category_id": "auth_sso",
+          "name": "SSO 로그인",
+          "group_id": "auth",
+          "sort": 6,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "소속 부서가 잘못 표시됩니다"
+          ],
+          "category_id": "auth_dept",
+          "name": "부서 / 조직 정보",
+          "group_id": "auth",
+          "sort": 7,
+          "enabled": true
+        }
+      ],
+      "group_name": "권한 / 계정",
+      "sort": 3,
+      "enabled": true
+    },
+    {
+      "group_id": "etc",
+      "categories": [
+        {
+          "questions": [],
+          "category_id": "etc_free",
+          "name": "기타 / 직접 입력",
+          "group_id": "etc",
+          "sort": 0,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "포털 공지사항은 어디서 보나요?"
+          ],
+          "category_id": "etc_portal",
+          "name": "포털 사용 일반",
+          "group_id": "etc",
+          "sort": 1,
+          "enabled": true
+        },
+        {
+          "questions": [
+            "담당자에게 직접 문의하려면?"
+          ],
+          "category_id": "etc_contact",
+          "name": "담당자 문의",
+          "group_id": "etc",
+          "sort": 2,
+          "enabled": true
+        }
+      ],
+      "group_name": "기타",
+      "sort": 4,
+      "enabled": true
+    }
+  ],
+  "quick_category_ids": [
+    "api_reg_flow",
+    "api_reg_field",
+    "spc_create",
+    "tmplt_edit",
+    "api_reg_err",
+    "auth_group"
+  ]
+}

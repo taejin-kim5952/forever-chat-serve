@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>API Manager 도우미 — openapi-chat</title>
+<link rel="stylesheet" href="chat.css">
+</head>
+<body>
+
+<div class="chat_page">
+
+  <!-- ===== 헤더 (qr_head 톤) — 위젯 이식 시 제외되는 영역 ===== -->
+  <header class="chat_head">
+    <span class="chat_head_logo">KT</span>
+    <h1 class="chat_head_title">API Manager 도우미</h1>
+    <p class="chat_head_sub">API 등록 · API 그룹(스펙) 등록 · 템플릿 관리</p>
+    <div class="chat_head_actions">
+      <button type="button" class="qr_pill" id="btnReset">대화 초기화</button>
+    </div>
+  </header>
+
+  <!-- ===== 퍼블 확인용 상태 목업 바 (개발 이식 시 삭제) ===== -->
+  <div class="chat_devbar" data-dev-only="true">
+    <strong>상태 목업</strong>
+    <button type="button" class="qr_pill" data-mock="rag">정상 답변(rag)</button>
+    <button type="button" class="qr_pill" data-mock="cache">정상 답변(cache·출처 링크 없음)</button>
+    <button type="button" class="qr_pill" data-mock="fallback">fallback</button>
+    <button type="button" class="qr_pill" data-mock="typing">로딩(타이핑)</button>
+    <button type="button" class="qr_pill" data-mock="error">에러</button>
+    <button type="button" class="qr_pill" data-mock="disabled">입력창 disabled 토글</button>
+    <button type="button" class="qr_pill" data-mock="category">카테고리 선택 상태</button>
+    <button type="button" class="qr_pill" data-mock="popover">팝오버 열기</button>
+    <button type="button" class="qr_pill" data-mock="search_none">검색 결과 없음</button>
+  </div>
+
+  <!-- ===== 대화 블록: 이 <section> 하나가 추후 위젯으로 이식되는 단위 ===== -->
+  <section class="chat_block" id="chatBlock" aria-label="API Manager 도우미 대화">
+
+    <div class="chat_list" id="chatList" role="log" aria-live="polite" aria-atomic="false">
+      <div class="chat_list_inner" id="chatListInner">
+
+        <!-- 대화 시작 안내 + 카테고리 카드 (첫 진입 시에만 노출) -->
+        <div class="chat_intro" id="chatIntro">
+          <h2 class="chat_intro_title">무엇이 궁금하신가요?</h2>
+          <p class="chat_intro_desc">주제를 먼저 고르시면 더 정확한 답변을 드릴 수 있어요. 바로 질문을 입력하셔도 됩니다.</p>
+
+          <!-- 자주 찾는 주제 (칩 최대 6개 + 전잴 주제 보기) -->
+          <div class="chat_cat_quick" id="chatCatQuick">
+            <div class="chat_cat_quick_head">
+              <span class="chat_cat_quick_title">자주 찾는 주제</span>
+              <button type="button" class="chat_cat_more">
+                전잴 주제 보기
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
+            <div class="chat_cat_quick_chips" id="chatCatQuickChips"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 입력 영역 (하단 고정) -->
+    <div class="chat_compose" id="chatCompose">
+      <div class="chat_compose_inner">
+
+        <!-- 주제 선택 쇼(상시 1줄) + 팝오버 + 추천 질문 -->
+        <div class="chat_cat_zone">
+
+          <div class="chat_cat_row">
+            <!-- 트리거: 중첩 button 문제를 피하기 위해 겉은 div, 안에 본버튼 + 해제버튼 -->
+            <div class="chat_cat_trigger" id="chatCatTrigger" data-category-id="" data-category-label="">
+              <button type="button" class="chat_cat_trigger_main" aria-expanded="false" aria-controls="chatCatPopover" aria-haspopup="dialog">
+                <span class="chat_cat_trigger_hash" aria-hidden="true">#</span>
+                <span class="chat_cat_trigger_label" data-bind="category_label">주제 선택</span>
+                <svg class="chat_cat_trigger_caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <button type="button" class="chat_cat_clear" data-category-clear aria-label="주제 선택 해제">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <button type="button" class="chat_cat_qbtn" id="chatCatQBtn" data-question-count="0" aria-expanded="false" aria-controls="chatCatQuestions">
+              추천 질문 <b class="chat_cat_qbtn_num">0</b>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- 추천 질문 목록 (기본 접힘, max-height 160px + 스효) -->
+          <div class="chat_cat_questions" id="chatCatQuestions" aria-hidden="true"></div>
+
+          <!-- 주제 선택 팝오버 (position:absolute — 레이아웃을 밀지 않음) -->
+          <div class="chat_cat_popover" id="chatCatPopover" role="dialog" aria-label="주제 선택" data-selected-category="" aria-hidden="true">
+            <div class="chat_cat_pop_head">
+              <span class="chat_cat_pop_title">주제 선택</span>
+              <button type="button" class="chat_cat_pop_close" data-popover-close aria-label="닫기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="chat_cat_pop_search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="text" id="chatCatSearch" placeholder="주제 검색" aria-label="주제 검색" autocomplete="off">
+            </div>
+            <div class="chat_cat_pop_body" id="chatCatGroups"></div>
+            <p class="chat_cat_noresult">일치하는 주제가 없습니다. 그냥 질문을 입력해 주세요.</p>
+          </div>
+
+        </div>
+
+        <form class="chat_form" id="chatForm" autocomplete="off">
+          <div class="chat_input_wrap">
+            <input type="text" class="chat_input" id="chatInput" placeholder="질문을 입력하세요" aria-label="질문 입력">
+          </div>
+          <button type="submit" class="qr_pill qr_pill_accent chat_send" id="chatSend">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            전송
+          </button>
+        </form>
+
+        <p class="chat_notice">AI가 생성한 답변으로, 실제 화면과 다를 수 있습니다. 중요한 작업은 매뉴얼을 함께 확인해 주세요.</p>
+      </div>
+    </div>
+
+  </section>
+  <!-- ===== /대화 블록 ===== -->
+
+</div>
+
+<!-- ===== 출처 문서 상세 모달 (.qr_modal_backdrop 패턴) ===== -->
+<div class="qr_modal_backdrop" id="srcModal" role="dialog" aria-modal="true" aria-labelledby="srcModalTitle">
+  <div class="qr_modal">
+    <div class="qr_modal_head">
+      <h3 class="qr_modal_title" id="srcModalTitle" data-bind="source_docs[].title">출처 문서</h3>
+      <button type="button" class="qr_modal_close" data-modal-close aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="qr_modal_body">
+      <dl>
+        <dt>문서 제목</dt><dd data-bind="source_docs[].title">—</dd>
+        <dt>참조</dt><dd data-bind="source_docs[].url_or_ref">—</dd>
+        <dt>답변 경로</dt><dd data-bind="answered_by">—</dd>
+      </dl>
+    </div>
+    <div class="qr_modal_actions">
+      <button type="button" class="qr_pill" data-modal-close>닫기</button>
+      <a class="qr_pill qr_pill_teal" id="srcModalGo" href="#" target="_self">문서로 이동</a>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     상태별 마크업 템플릿 — 개발 쪽에서 clone 해서 data-bind 위치에 값 주입
+     ========================================================================== -->
+
+<!-- 1) 사용자 말풍선 -->
+<template id="tpl_user">
+  <div class="chat_msg chat_msg_user" data-msg-role="user">
+    <span class="chat_avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </span>
+    <div class="chat_body">
+      <!-- 카테고리 미선택으로 보낸 질문은 이 배지를 remove() 하세요 -->
+      <span class="chat_msg_cat" data-bind="category_label"></span>
+      <div class="chat_bubble" data-bind="question"></div>
+    </div>
+  </div>
+</template>
+
+<!-- 1-1) 인트로 빠른 선택 칩 1개 -->
+<template id="tpl_cat_quick_chip">
+  <button type="button" class="chat_cat_quick_chip" data-category-id="" data-category-label="">
+    <span data-bind="label"></span>
+  </button>
+</template>
+
+<!-- 1-2) 팝오버 대분류 바디(헤더 + 카테고리 목록) -->
+<template id="tpl_cat_group">
+  <div class="chat_cat_group" data-group-id="">
+    <button type="button" class="chat_cat_group_head" data-group-id="" aria-expanded="false">
+      <svg class="chat_cat_group_caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      <span class="chat_cat_group_label" data-bind="group_label"></span>
+      <span class="chat_cat_group_count" data-bind="count"></span>
+    </button>
+    <div class="chat_cat_list" role="listbox" aria-label="카테고리 목록"></div>
+  </div>
+</template>
+
+<!-- 1-3) 팝오버 카테고리 항목 1개 -->
+<template id="tpl_cat_item">
+  <button type="button" class="chat_cat_item" role="option" aria-selected="false" data-category-id="" data-category-label="" data-group-id="">
+    <span class="chat_cat_item_label" data-bind="label"></span>
+    <svg class="chat_cat_item_check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+  </button>
+</template>
+
+<!-- 1-4) [rev.1 보존] 카테고리 카드 — 현재 화면 미사용, 관리자 화면 재활용용 -->
+<template id="tpl_cat_card">
+  <button type="button" class="chat_cat_card" data-category-id="" data-category-label="">
+    <span class="chat_cat_card_icon" data-bind="icon" aria-hidden="true"></span>
+    <span class="chat_cat_card_text">
+      <span class="chat_cat_card_label" data-bind="label"></span>
+      <span class="chat_cat_card_desc" data-bind="desc"></span>
+    </span>
+  </button>
+</template>
+
+<!-- 1-3) 추천 질문 1개 -->
+<template id="tpl_cat_question">
+  <button type="button" class="chat_q_item" data-question="">
+    <svg class="chat_q_item_ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+    <span class="chat_q_item_text" data-bind="question"></span>
+  </button>
+</template>
+
+<!-- 2) 봇 정상 답변 (answered_by = cache | intent | rag) -->
+<template id="tpl_bot">
+  <div class="chat_msg chat_msg_bot" data-msg-role="bot" data-answered-by="" data-confidence="">
+    <span class="chat_avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 4v4M8 14h.01M16 14h.01"/></svg>
+    </span>
+    <div class="chat_body">
+      <div class="chat_bubble" data-bind="answer"></div>
+      <div class="chat_sources" data-bind="source_docs">
+        <span class="chat_sources_label">출처</span>
+      </div>
+      <div class="chat_meta" data-bind="confidence">AI가 생성한 답변입니다</div>
+    </div>
+  </div>
+</template>
+
+<!-- 2-1) 출처 문서 배지 — url_or_ref 있으면 <a>, 없으면 <span class="chat_src_plain"> -->
+<template id="tpl_src">
+  <a class="chat_src" href="#" data-bind="source_docs[]">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M9 15h6M9 11h3"/></svg>
+    <span class="chat_src_title" data-bind="source_docs[].title"></span>
+  </a>
+</template>
+
+<!-- 3) fallback 말풍선 (answered_by = fallback) -->
+<template id="tpl_fallback">
+  <div class="chat_msg chat_msg_bot chat_msg_fallback" data-msg-role="bot" data-answered-by="fallback">
+    <span class="chat_avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    </span>
+    <div class="chat_body">
+      <div class="chat_bubble chat_bubble_fallback">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H7l-3 3Z"/></svg>
+        <div>
+          <p class="chat_fb_msg" data-bind="message"></p>
+          <span class="chat_ticket" data-bind="ticket_id"></span>
+        </div>
+      </div>
+      <div class="chat_meta">담당자 확인 후 등록된 이메일로 회신됩니다</div>
+    </div>
+  </div>
+</template>
+
+<!-- 4) 로딩(타이핑) 인디케이터 -->
+<template id="tpl_typing">
+  <div class="chat_msg chat_msg_bot chat_typing" data-msg-role="bot" data-state="loading" aria-label="답변 작성 중">
+    <span class="chat_avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M12 4v4M8 14h.01M16 14h.01"/></svg>
+    </span>
+    <div class="chat_body">
+      <div class="chat_bubble">
+        <span class="chat_dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="chat_typing_text">답변을 찾고 있습니다…</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- 5) 에러 말풍선 (API 호출 실패) -->
+<template id="tpl_error">
+  <div class="chat_msg chat_msg_bot chat_msg_error" data-msg-role="bot" data-state="error">
+    <span class="chat_avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+    </span>
+    <div class="chat_body">
+      <div class="chat_bubble chat_bubble_error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <div>
+          <p class="chat_err_title">답변을 가져오지 못했습니다</p>
+          <p class="chat_err_desc" data-bind="error_message">일시적인 오류로 서버와 통신할 수 없습니다. 잠시 후 다시 시도해 주세요.</p>
+          <button type="button" class="qr_pill qr_pill_outline chat_retry" data-retry data-bind="question">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            다시 시도
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="chat.js"></script>
+</body>
+</html>

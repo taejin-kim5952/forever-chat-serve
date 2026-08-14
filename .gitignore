@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# 파생물 — 아래 세 가지에서 언제든 다시 만들 수 있다.
+#   data/qa_index.json · data/categories.json · data/raw_docs/
+# 재생성: POST /api/admin/qa/reindex?include_docs=true
+data/chroma/
+
+# 운영 중에 쌓이는 것. PC마다 다르고, 합칠 이유가 없다.
+data/logs/
+data/question_log.jsonl
+data/question_embeddings.jsonl
+data/analytics.json
+data/runtime_config.json

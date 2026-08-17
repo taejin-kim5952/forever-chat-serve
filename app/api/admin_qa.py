@@ -7,7 +7,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core import jobs
 from app.core.auth import require_admin
+from app.core.feedback import reports_by_qa
 from app.core.logging import get_logger, log_event
 from app.models.schemas import (
     QaBulkRequest,
@@ -16,7 +18,7 @@ from app.models.schemas import (
     QaSaveRequest,
     ReindexResponse,
 )
-from app.pipeline.retrieve import get_retriever
+from app.ingestion.doc_index import DocIndex
 from app.qa import store as qa_store
 from app.qa.index import QaIndex
 
@@ -25,11 +27,13 @@ logger = get_logger("api.admin_qa")
 router = APIRouter(prefix="/api/admin/qa", tags=["admin-qa"], dependencies=[Depends(require_admin)])
 
 
-def _to_row(item: qa_store.QaItem) -> dict:
+def _to_row(item: qa_store.QaItem, report_count: int = 0) -> dict:
     data = item.model_dump()
     # 목록은 답변 전문을 실어 나를 필요가 없다 — 80건이면 응답이 수백 KB가 된다.
     data["answer_preview"] = " ".join(item.answer.split())[:120]
     data["variant_count"] = len(item.variants)
+    # 👎 개수. 정렬(`report_count`)과 검수 목록의 배지에 쓴다. **상태는 바꾸지 않는다.**
+    data["report_count"] = report_count
     data.pop("answer", None)
     return data
 
@@ -41,9 +45,10 @@ def list_qa(
     status: str | None = None,
     category_id: str | None = None,
     keyword: str | None = None,
-    sort: str = Query("hit_count", pattern="^(hit_count|variant_count|updated_at)$"),
+    sort: str = Query("hit_count", pattern="^(hit_count|variant_count|updated_at|report_count)$"),
 ) -> QaPage:
     items = qa_store.load_qa()
+    reports = reports_by_qa()
 
     if status:
         items = [i for i in items if i.status == status]
@@ -63,11 +68,12 @@ def list_qa(
         "hit_count": lambda i: i.hit_count,
         "variant_count": lambda i: len(i.variants),
         "updated_at": lambda i: i.updated_at,
+        "report_count": lambda i: len(reports.get(i.qa_id, [])),
     }[sort]
     items.sort(key=key, reverse=True)
 
     return QaPage(
-        items=[_to_row(i) for i in items[offset: offset + limit]],
+        items=[_to_row(i, len(reports.get(i.qa_id, []))) for i in items[offset: offset + limit]],
         total=len(items),
         limit=limit,
         offset=offset,
@@ -80,7 +86,13 @@ def get_qa(qa_id: str) -> dict:
     item = qa_store.get_item(qa_id)
     if not item:
         raise HTTPException(status_code=404, detail="QA 항목을 찾을 수 없습니다.")
-    return item.model_dump()
+    data = item.model_dump()
+    # 검수 화면의 `사용자 신고`. 화면은 5건까지만 그리지만 개수는 전부 세어 보낸다 —
+    # '3건 중 5건 표시' 같은 어긋남이 생기지 않게 한다.
+    reports = reports_by_qa().get(qa_id, [])
+    data["reports"] = [r.model_dump() for r in reports]
+    data["report_count"] = len(reports)
+    return data
 
 
 @router.post("")
@@ -142,12 +154,29 @@ def bulk(request: QaBulkRequest) -> QaBulkResponse:
 
 @router.post("/reindex", response_model=ReindexResponse)
 def reindex(include_docs: bool = False) -> ReindexResponse:
-    """전체 재색인. 임베딩 모델을 바꿨거나 QA 파일을 직접 넣었을 때 쓴다."""
-    result = QaIndex().rebuild()
+    """전체 재색인. 임베딩 모델을 바꿨거나 QA 파일을 직접 넣었을 때 쓴다.
+
+    **모델 불일치 검사를 끄고 인덱스를 연다.** 모델을 바꾸면 컬렉션을 여는 것부터 막히는데,
+    그 상태를 푸는 방법이 바로 이 재색인이다. 검사를 그대로 두면 "재색인하세요"라는 오류를
+    내면서 재색인은 못 하는 상태가 된다(실제로 겪음).
+    """
+    started = jobs.now()
+    result = QaIndex(check_model=False).rebuild()
     docs: dict = {}
     if include_docs:
-        docs = get_retriever().doc_index.rebuild()
+        docs = DocIndex(check_model=False).rebuild()
     # 인덱스 핸들을 새로 잡게 한다 — 컬렉션을 지우고 다시 만들었으므로 옛 핸들은 죽어 있다.
     from app.pipeline.retrieve import reset_retriever
     reset_retriever()
+
+    # 색인은 요청 안에서 끝나 '진행 중'으로 띄울 것이 없다. 대신 이력에 남겨
+    # "문서를 넣었으니 이제 QA를 생성하라"로 이어지게 한다(진행 현황 · 최근 작업).
+    chunks = sum(docs.values())
+    jobs.record(
+        "index",
+        started_at=started,
+        summary=f"QA {result['items']}건 · 문서 {len(docs)}건 · {chunks}청크" if include_docs
+                else f"QA {result['items']}건 · {result['vectors']}벡터",
+        counts={"docs": len(docs), "chunks": chunks, "qa": result["items"]},
+    )
     return ReindexResponse(items=result["items"], vectors=result["vectors"], docs=docs)

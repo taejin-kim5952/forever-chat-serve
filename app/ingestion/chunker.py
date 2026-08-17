@@ -18,7 +18,29 @@ from pathlib import Path
 
 import frontmatter
 
+from app.core.config import get_settings
+from app.core.logging import log_event
+
 _HEADING = re.compile(r"^(#{2,3})[ \t]+(\S.*)$", flags=re.MULTILINE)
+
+# `![대체텍스트](img/파일.svg)` — 문서의 그림.
+_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+
+
+def strip_media(text: str) -> str:
+    """벡터로 만들기 **전에** 그림 표기를 걷어낸다. 대체 텍스트는 남긴다.
+
+    걷어내지 않으면 두 가지가 조용히 나빠진다.
+
+    - **검색**: `img/가입-절차-흐름도.svg` 같은 파일 경로가 그대로 임베딩에 섞인다. 사람이
+      쓰지 않는 문자열이라 벡터를 흐리기만 한다.
+    - **생성**: 청크가 그대로 프롬프트에 들어가므로 모델이 `![...](...)` 를 답변에 베껴 쓴다.
+      `[[문서ID]]` 로 이미 겪은 것과 같은 종류다(`app/studio/generate.py` 의 `clean_answer`).
+
+    대체 텍스트는 남긴다 — "가입 절차 흐름도" 라는 말 자체가 그 절이 무엇에 관한 것인지
+    알려주는 좋은 검색 재료다. **저장되는 원문은 건드리지 않는다**: 화면은 그림을 그려야 한다.
+    """
+    return _IMAGE.sub(lambda m: m.group(1), text)
 
 
 @dataclass
@@ -97,10 +119,37 @@ def chunk_markdown_file(path: Path) -> tuple[str, list[Chunk]]:
     return doc_hash, chunks
 
 
+def oversize_chunks(chunks: list[Chunk], log_to=None) -> list[Chunk]:
+    """임베딩 모델의 입력 상한을 넘길 만한 조각을 찾아 남긴다.
+
+    모델마다 한 번에 읽는 길이가 정해져 있고(`bge-m3` 8192 · `embeddinggemma` 2048 토큰),
+    **넘치면 예외 없이 뒷부분이 버려진 채** 벡터가 만들어진다. 그 뒷부분을 묻는 질문은 영영
+    걸리지 않는데, 화면에는 문서가 멀쩡히 색인된 것으로 보인다. 1차의 "컨텍스트 창 초과로
+    조용히 잘림"과 같은 종류다.
+
+    자르거나 막지 않는다. **로그로 알리기만 한다** — 임계값을 잘못 잡아 멀쩡한 문서를 자르면
+    그게 더 나쁘고, 대응은 대개 "그 절에 소제목을 넣는 것"이라 사람이 문서를 고쳐야 한다.
+    기준은 `.env` 의 `EMBED_WARN_CHARS` 이며, 한국어는 대략 1자 ≈ 1토큰이다.
+    """
+    limit = get_settings().embed_warn_chars
+    if limit <= 0:
+        return []
+
+    over = [c for c in chunks if len(c.text) > limit]
+    if over and log_to is not None:
+        log_event(
+            log_to, "chunk may exceed embedding input limit",
+            limit_chars=limit, count=len(over),
+            worst=f"{over[0].doc_id} :: {over[0].metadata.get('section_title', '')}",
+            worst_chars=max(len(c.text) for c in over),
+        )
+    return over
+
+
 def excerpt(text: str, max_chars: int = 160) -> str:
     """`related_docs` 카드에 넣을 발췌. 헤딩 줄과 마크다운 기호를 걷어낸 본문 앞부분."""
     lines = [
-        line.strip() for line in text.splitlines()
+        line.strip() for line in strip_media(text).splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
     plain = " ".join(lines)

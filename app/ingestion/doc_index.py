@@ -1,4 +1,4 @@
-"""원본 문서 색인 · 검색.
+﻿"""원본 문서 색인 · 검색.
 
 이 인덱스는 **답변을 만들지 않는다.** 검수된 QA에서 답을 못 찾았을 때
 "직접 답은 없지만 이 문서를 보시면 됩니다"를 내주는 차선책(`related_docs`)용이다.
@@ -11,8 +11,14 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_event
-from app.ingestion.chunker import Chunk, chunk_markdown_file, excerpt
-from app.ingestion.embedder import OllamaEmbedder
+from app.ingestion.chunker import (
+    Chunk,
+    chunk_markdown_file,
+    excerpt,
+    oversize_chunks,
+    strip_media,
+)
+from app.ingestion.embedder import OnnxEmbedder
 from app.ingestion.vector_store import doc_collection, rebuild_collection, to_similarity
 
 logger = get_logger("ingestion.doc_index")
@@ -21,9 +27,10 @@ _DOC_HASH_KEY = "doc_hash"
 
 
 class DocIndex:
-    def __init__(self):
-        self.collection = doc_collection()
-        self.embedder = OllamaEmbedder()
+    def __init__(self, check_model: bool = True):
+        # `check_model=False` 는 **재색인 경로 전용**이다(app/qa/index.py 의 같은 주석 참고).
+        self.collection = doc_collection(check_model=check_model)
+        self.embedder = OnnxEmbedder()
 
     # ------------------------------------------------------------------ 색인
 
@@ -43,9 +50,12 @@ class DocIndex:
     def _upsert(self, doc_hash: str, chunks: list[Chunk]) -> int:
         if not chunks:
             return 0
+        oversize_chunks(chunks, log_to=logger)
         texts = [c.text for c in chunks]
+        # **저장은 원문, 임베딩은 그림 표기를 걷어낸 것.** 화면은 그림을 그려야 하고,
+        # 벡터에는 파일 경로가 섞이면 안 된다(chunker.strip_media 참고).
         # 긴 본문 쪽이므로 document 태스크. 질문은 query 태스크로 넣는다(비대칭 검색).
-        embeddings = self.embedder.embed_batch(texts, task="document")
+        embeddings = self.embedder.embed_batch([strip_media(t) for t in texts], task="document")
         self.collection.upsert(
             ids=[c.chunk_id for c in chunks],
             embeddings=embeddings,

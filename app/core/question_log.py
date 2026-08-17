@@ -112,13 +112,20 @@ def read_question_logs(
     keyword: str | None = None,
     since: str | None = None,
     include_test: bool = False,
+    log_ids: set[str] | None = None,
 ) -> tuple[list[QuestionLogEntry], int]:
     """최근 질문부터 반환한다. `(항목, 필터 적용 후 전체 건수)`.
 
     PoC 규모(수천 건)라 파일 전체를 읽어 필터링한다. 건수가 커지면 SQLite 등으로 옮긴다.
+
+    `log_ids` 는 다른 파일에서 고른 결과로 좁힐 때 쓴다(지금은 '👎만' 필터). 여기서 피드백
+    파일을 직접 읽지 않는 이유는, 질문 이력이 다른 파일의 사정을 몰라야 하기 때문이다 —
+    고르는 쪽이 id 집합만 넘긴다.
     """
     entries = read_all_question_logs()
 
+    if log_ids is not None:
+        entries = [e for e in entries if e.log_id in log_ids]
     if not include_test:
         entries = [e for e in entries if e.channel not in TEST_CHANNELS]
     if result_type:

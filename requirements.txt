@@ -4,9 +4,16 @@ pydantic==2.10.3
 pydantic-settings==2.7.0
 python-dotenv==1.0.1
 chromadb==0.5.23
+# 임베딩은 앱 안에서 ONNX 로 돈다(app/ingestion/embedder.py). 운영에 필요한 것은 이 둘뿐이고,
+# CPU 판이라 GPU 드라이버가 없어도 된다 — 운영 서버에는 GPU가 없다.
+onnxruntime==1.28.0
+tokenizers==0.20.3
+# LLM(질문·답변·채점) 전용. **studio 에서만** 쓰인다.
 ollama==0.6.2
 numpy==2.2.1
 python-frontmatter==1.1.0
+# 관리자 화면의 폴더 업로드(multipart/form-data). FastAPI 는 파일 업로드에 이것을 요구한다.
+python-multipart==0.0.20
 httpx
 pytest==8.3.4
 pytest-asyncio==0.25.0

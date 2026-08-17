@@ -11,6 +11,10 @@
 Chroma가 예외를 내거나, 더 나쁘게는 조용히 엉뚱한 결과를 준다. 그래서 컬렉션 메타데이터에
 **어떤 모델로 색인했는지** 적어두고, 다를 때 예외로 세운다. "재색인하세요"라는 문장 하나가
 없어서 며칠을 헤매는 상황을 막기 위한 것이다.
+
+적어 두는 값은 **모델 폴더 이름**이다(`bge-m3-onnx`). 이름이 아니라 폴더인 이유는, 같은
+`bge-m3` 라도 양자화·변환본이 다르면 벡터가 다르기 때문이다 — 실측 코사인 0.984 다.
+차원이 같아 예외가 안 나면서 품질만 나빠지는 조합이라 이름만으로는 못 잡는다.
 """
 
 import threading
@@ -53,19 +57,24 @@ def reset_client() -> None:
         _CLIENT = None
 
 
+def embed_model_name() -> str:
+    """컬렉션에 적어 두는 '무엇으로 색인했는가'. 모델 폴더 이름을 쓴다."""
+    return Path(get_settings().embed_onnx_dir).name
+
+
 def get_collection(name: str, check_model: bool = True) -> Collection:
-    settings = get_settings()
+    current = embed_model_name()
     collection = get_client().get_or_create_collection(
         name,
-        metadata={"hnsw:space": "cosine", _EMBED_MODEL_KEY: settings.ollama_embed_model},
+        metadata={"hnsw:space": "cosine", _EMBED_MODEL_KEY: current},
     )
 
     if check_model:
         indexed_with = (collection.metadata or {}).get(_EMBED_MODEL_KEY)
-        if indexed_with and indexed_with != settings.ollama_embed_model and collection.count():
+        if indexed_with and indexed_with != current and collection.count():
             raise EmbedModelMismatch(
                 f"'{name}' 컬렉션은 '{indexed_with}' 로 색인돼 있는데 현재 임베딩 모델은 "
-                f"'{settings.ollama_embed_model}' 입니다. 모델을 되돌리거나 재색인하세요."
+                f"'{current}' 입니다. 모델을 되돌리거나 재색인하세요."
             )
     return collection
 
@@ -85,7 +94,7 @@ def rebuild_collection(name: str) -> Collection:
         client.delete_collection(name)
     except Exception:   # noqa: BLE001 - 없으면 지울 것도 없다
         pass
-    log_event(logger, "collection rebuilt", collection=name, embed_model=get_settings().ollama_embed_model)
+    log_event(logger, "collection rebuilt", collection=name, embed_model=embed_model_name())
     return get_collection(name, check_model=False)
 
 

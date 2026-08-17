@@ -1,5 +1,6 @@
 import json
 import logging
+import logging.handlers
 import os
 import time
 from pathlib import Path
@@ -31,7 +32,12 @@ def setup_logging() -> None:
     if root.handlers:
         return
 
-    file_handler = logging.FileHandler(settings.log_file, encoding="utf-8")
+    # 회전을 두는 이유: 로그 파일은 지우는 사람이 없다. 질문 1건에 여러 줄이 쌓이고 서버는
+    # 몇 달씩 떠 있으므로, 상한이 없으면 파일 하나가 수 GB가 된다. 5MB × 5개면 최근 며칠은
+    # 남으면서 디스크는 25MB 를 넘지 않는다.
+    file_handler = logging.handlers.RotatingFileHandler(
+        settings.log_file, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8",
+    )
     file_handler.setFormatter(JsonFileFormatter())
     root.addHandler(file_handler)
 

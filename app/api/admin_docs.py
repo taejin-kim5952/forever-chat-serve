@@ -8,17 +8,21 @@ serve 모드에서는 **읽기 전용**이다. 문서를 고치면 재색인이 
 from pathlib import Path
 
 import frontmatter
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.core import jobs
 from app.core.auth import require_admin
 from app.core.config import get_settings, is_studio
 from app.core.logging import get_logger, log_event
+from app.ingestion.doc_upload import MAX_FILES_PER_REQUEST, UploadItem, register_uploads
 from app.models.schemas import (
     DocCreateRequest,
     DocDetail,
     DocSaveRequest,
     DocSaveResponse,
     DocSummary,
+    DocUploadItemResult,
+    DocUploadResponse,
 )
 from app.pipeline.retrieve import get_retriever
 from app.qa import store as qa_store
@@ -87,6 +91,63 @@ def create_doc(request: DocCreateRequest) -> DocSaveResponse:
     chunks = get_retriever().doc_index.ingest_file(path, force=True)
     log_event(logger, "doc created", doc_id=request.doc_id, chunks=chunks)
     return DocSaveResponse(doc_id=request.doc_id, chunks_created=chunks, status="created")
+
+
+@router.post("/upload", response_model=DocUploadResponse)
+async def upload_docs(
+    files: list[UploadFile] = File(..., description="문서 파일. 파일 이름이 문서 ID가 된다"),
+    paths: list[str] = Form(default=[], description="폴더 안 상대 경로. 순서는 files 와 같다"),
+    overwrite: bool = Form(default=False),
+) -> DocUploadResponse:
+    """폴더째 올린 문서를 파일 이름으로 등록한다(탭 ⑤ '폴더 업로드').
+
+    화면이 폴더를 통째로 보내지 않고 몇 건씩 나눠 보낸다. 그래서 이 경로는 **묶음 하나**만
+    처리하고 상태를 남기지 않는다 — 중간에 창을 닫아도 그때까지 들어간 문서는 그대로 남고,
+    다시 올리면 이미 있는 것은 건너뛴다.
+    """
+    _require_studio()
+    if len(files) > MAX_FILES_PER_REQUEST:
+        raise HTTPException(status_code=400, detail=f"한 번에 {MAX_FILES_PER_REQUEST}개까지 보낼 수 있습니다.")
+
+    # 브라우저는 `webkitRelativePath` 를 파일 이름에 넣어주지 않는다. 하위 폴더까지 보이는
+    # 경로를 화면이 따로 보내고, 어긋나면 파일 이름으로 돌아간다(결과 표의 표시에만 쓴다).
+    items = [
+        UploadItem(
+            path=(paths[idx] if idx < len(paths) else None) or file.filename or "",
+            data=await file.read(),
+        )
+        for idx, file in enumerate(files)
+    ]
+
+    started = jobs.now()
+    results = register_uploads(items, index=get_retriever().doc_index, overwrite=overwrite)
+    counts = {"created": 0, "updated": 0, "skipped": 0, "failed": 0}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+
+    # 화면이 몇 건씩 나눠 보내므로 묶음마다 이력을 남기면 폴더 하나가 열 줄을 차지한다.
+    # `merge=True` 가 바로 이어지는 같은 작업을 한 줄로 합친다(app/core/jobs.py).
+    jobs.record(
+        "upload",
+        status="failed" if counts["failed"] else "done",
+        started_at=started,
+        counts={"docs": counts["created"] + counts["updated"], **counts},
+        merge=True,
+        summary_from_counts=_upload_summary,
+    )
+
+    return DocUploadResponse(items=[DocUploadItemResult(**vars(r)) for r in results], **counts)
+
+
+def _upload_summary(counts: dict) -> str:
+    parts = [f"{counts.get('created', 0)}건 등록"]
+    if counts.get("updated"):
+        parts.append(f"{counts['updated']}건 갱신")
+    if counts.get("skipped"):
+        parts.append(f"{counts['skipped']}건 건너뜀")
+    if counts.get("failed"):
+        parts.append(f"{counts['failed']}건 실패")
+    return " · ".join(parts)
 
 
 @router.put("/{doc_id}", response_model=DocSaveResponse)

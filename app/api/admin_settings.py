@@ -6,7 +6,9 @@ from app.core.auth import require_admin
 from app.core.categories import CategoryStore, QUICK_LIMIT, load_categories, save_categories, sorted_store
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_event
+from app.core.profile import Profile, load_profile, save_profile
 from app.core.runtime_config import RuntimeConfig, load_runtime_config, reset_runtime_config, save_runtime_config
+from app.ingestion.vector_store import embed_model_name
 from app.models.schemas import AdminSettings, ModeResponse
 from app.qa import store as qa_store
 from app.qa.index import QaIndex
@@ -20,13 +22,39 @@ router = APIRouter(prefix="/api/admin", tags=["admin-settings"], dependencies=[D
 def mode() -> ModeResponse:
     """화면이 <body data-mode> 를 정하고 탭을 감추는 데 쓴다."""
     settings = get_settings()
+    studio = settings.app_mode == "studio"
     return ModeResponse(
         mode=settings.app_mode,
-        embed_model=settings.ollama_embed_model,
-        llm_model=settings.ollama_llm_model if settings.app_mode == "studio" else None,
+        embed_model=embed_model_name(),
+        llm_model=settings.ollama_llm_model if studio else None,
         qa_serving=len(qa_store.serving_items()),
         qa_vectors=QaIndex().count(),
+        # 역할별 모델은 비어 있을 수 있다(그때는 OLLAMA_LLM_MODEL 을 쓴다). 화면이 "무엇이
+        # 실제로 쓰이는지"를 보여줘야 하므로 여기서 그 대체까지 마쳐서 내려보낸다.
+        question_model=(settings.ollama_question_model or settings.ollama_llm_model) if studio else None,
+        answer_model=(settings.ollama_answer_model or settings.ollama_llm_model) if studio else None,
+        # 채점 모델만은 대체하지 않는다 — 비어 있는 것이 '채점 안 함'이라는 뜻이다.
+        judge_model=(settings.ollama_judge_model or None) if studio else None,
+        num_ctx=settings.ollama_num_ctx if studio else 0,
+        num_predict=settings.ollama_num_predict if studio else 0,
+        # 문서 길이 기준은 임베딩 쪽 값이라 serve 에서도 내려보낸다.
+        embed_warn_chars=settings.embed_warn_chars,
     )
+
+
+@router.get("/profile", response_model=Profile)
+def get_profile() -> Profile:
+    """설정 → 납품처. 파일이 없으면 기본값이 온다(화면은 그것을 그대로 보여준다)."""
+    return load_profile()
+
+
+@router.put("/profile", response_model=Profile)
+def put_profile(payload: Profile) -> Profile:
+    """조직 이름이 비면 로고 자리가 빈 사각형이 된다 — 그건 저장 실패보다 알아채기 어렵다."""
+    if not payload.organization.strip() or not payload.service_name.strip():
+        raise HTTPException(status_code=400, detail="조직 이름과 서비스 이름은 비울 수 없습니다.")
+    save_profile(payload)
+    return load_profile()
 
 
 @router.get("/settings", response_model=AdminSettings)

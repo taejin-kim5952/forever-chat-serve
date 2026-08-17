@@ -1,0 +1,37 @@
+# 개발 서버 시험용. 운영(AKS)은 이 파일이 아니라 매니페스트를 쓰게 된다.
+#
+#   docker compose up -d --build
+#   docker compose logs -f
+#
+# ### 포트를 127.0.0.1 에만 여는 이유 ★
+#
+# 개발 서버는 인터넷에 노출돼 있고 SSH 실패 로그인이 2,600건 넘게 관측된 적이 있다
+# (인수인계 7번). 관리자 화면에 인증이 걸려 있어도 시험 단계에서 굳이 열어 둘 이유가 없다.
+# 접속은 SSH 터널로 한다:  ssh -L 18100:127.0.0.1:18100 사용자@서버
+
+services:
+  chat:
+    build: .
+    image: openapi-chat-serve:latest
+    container_name: openapi-chat-serve
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18100:18100"
+    environment:
+      APP_MODE: serve
+      # 반드시 바꿔서 주입한다. 기본값이면 기동 로그에 경고가 남는다.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD 를 지정하세요}
+      # 비우면 재시작할 때마다 로그인이 풀린다. 파드를 늘릴 때는 반드시 지정.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      LOG_FILE: /app/data/logs/app.jsonl
+    volumes:
+      # 원본 3종(qa_index.json · categories.json · raw_docs/)과 파생물(chroma/·이력)이
+      # 모두 여기 있다. 컨테이너를 새로 만들어도 남아야 한다.
+      #
+      # ### 리눅스 서버라면 먼저 `sudo chown -R 10001:10001 data/` ★
+      #
+      # 컨테이너는 uid 10001 로 돈다. 윈도우 개발 PC 의 bind mount 는 rwxrwxrwx 로 보여
+      # 그냥 되지만, 리눅스는 호스트 권한이 그대로 넘어간다. 안 맞추면 조회는 되는데
+      # 질문 이력·승인·설정 저장이 **조용히** 실패한다.
+      - ./data:/app/data

@@ -5,6 +5,7 @@
 """
 
 import base64
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,11 +39,39 @@ def test_admin_endpoints_require_auth(client, path):
     assert client.get(path).status_code == 401
 
 
-def test_admin_page_requires_auth(client):
+def test_admin_page_is_a_shell_without_data(client):
+    """관리자 HTML 자체는 인증 없이 내려간다.
+
+    로그인 모달이 그 페이지 안에 있어서, 페이지를 막으면 로그인할 화면도 막힌다.
+    대신 **데이터는 한 줄도 실려 있지 않다** — 전부 인증 걸린 API 에서 가져온다.
+    """
     response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert client.get("/api/admin/qa").status_code == 401
+
+
+def test_unauthorized_response_has_no_basic_challenge(client):
+    """브라우저 기본 로그인 창이 뜨면 우리 로그인 모달과 두 개가 겹친다."""
+    response = client.get("/api/admin/qa")
+
     assert response.status_code == 401
-    # 이 헤더가 없으면 브라우저가 로그인 창을 띄우지 않는다.
-    assert "Basic" in response.headers.get("WWW-Authenticate", "")
+    assert "WWW-Authenticate" not in response.headers
+
+
+def test_removed_review_page_is_gone(client):
+    """`/admin/review` 임시 화면은 2026-08-16 에 걷어냈다.
+
+    검수는 관리자 화면의 `검수` 항목이 맡는다. 라우트가 되살아나면 편집 폼이 두 벌이 되어
+    한쪽만 고쳐지는 상태로 돌아간다 — 그래서 사라진 것을 테스트로 붙잡아 둔다.
+    """
+    assert client.get("/admin/review").status_code == 404
+
+
+def test_approval_is_guarded_by_the_api_not_the_screen(client):
+    """화면은 껍데기만 내려간다. 승인 권한은 `/api/admin/qa` 가 지킨다."""
+    assert client.get("/admin").status_code == 200
+    assert client.post("/api/admin/qa", json={"question": "질문"}).status_code == 401
 
 
 def test_wrong_password_is_rejected(client):
@@ -60,6 +89,65 @@ def test_chat_endpoints_are_public(client):
 
 
 # ─────────────────────────────────────────────────────────── 모드 게이팅
+
+
+def test_mode_reports_runtime_models_for_the_screen(client, auth, monkeypatch, isolated_data):
+    """설정 화면이 '지금 무엇이 쓰이는지'를 읽는 곳.
+
+    역할별 모델은 비어 있을 수 있고 그때는 `OLLAMA_LLM_MODEL` 이 쓰인다. 그 대체를 화면이
+    다시 계산하면 서버와 어긋나므로 여기서 마쳐서 내려보낸다.
+    """
+    settings = isolated_data
+    monkeypatch.setattr(settings, "app_mode", "studio")
+    monkeypatch.setattr(settings, "ollama_question_model", "")      # 비면 llm_model 로 대체
+    monkeypatch.setattr(settings, "ollama_answer_model", "big-model")
+    monkeypatch.setattr(settings, "ollama_judge_model", "")         # 비면 '채점 안 함'
+
+    body = client.get("/api/admin/mode", headers=auth).json()
+
+    assert body["question_model"] == settings.ollama_llm_model
+    assert body["answer_model"] == "big-model"
+    # 채점 모델만은 대체하지 않는다 — 비어 있는 것이 '채점 안 함'이라는 뜻이다.
+    assert body["judge_model"] is None
+    assert body["num_ctx"] == settings.ollama_num_ctx
+
+
+def test_serve_mode_hides_llm_settings(client, auth):
+    """운영에는 LLM이 없다. 모델 이름이 내려가면 화면이 없는 기능을 보여준다."""
+    body = client.get("/api/admin/mode", headers=auth).json()
+
+    assert body["llm_model"] is None
+    assert body["question_model"] is None
+    assert body["num_ctx"] == 0
+    # 임베딩은 운영에서도 돈다 — 질문을 벡터로 만들어야 검색이 된다.
+    assert body["embed_model"]
+    # 문서 길이 기준도 임베딩 쪽 값이라 운영에서도 내려간다(⑤ 문서 작성 안내가 읽는다).
+    assert body["embed_warn_chars"] > 0
+
+
+def test_reindex_works_after_the_embedding_model_changed(client, auth, isolated_data, monkeypatch):
+    """모델을 바꾼 뒤에도 재색인이 **되어야** 한다.
+
+    컬렉션은 어떤 모델로 색인했는지 적어 두고 다르면 예외를 낸다. 그런데 그 검사가 재색인
+    경로까지 막으면, "재색인하세요"라는 오류를 내면서 재색인은 못 하는 상태가 된다 —
+    실제로 Ollama 에서 ONNX 로 옮길 때 여기서 막혔다.
+    """
+    qa_store.upsert_item(qa_store.QaItem(
+        qa_id="qa_1", question="API 등록은 어떻게 하나요?", answer="답변", status="approved"))
+    QaIndex().upsert_item(qa_store.get_item("qa_1"))
+
+    # 모델을 바꾼 상황을 만든다(폴더 이름이 곧 색인 주체다).
+    monkeypatch.setattr(isolated_data, "embed_onnx_dir", str(Path(isolated_data.embed_onnx_dir).parent / "다른-모델"))
+    from app.ingestion import vector_store
+    vector_store.reset_client()
+
+    # 검색 경로는 막혀야 한다 — 어긋난 벡터로 답하느니 멈추는 편이 낫다.
+    with pytest.raises(vector_store.EmbedModelMismatch):
+        QaIndex()
+
+    # 그러나 재색인은 되어야 한다.
+    assert client.post("/api/admin/qa/reindex", headers=auth).status_code == 200
+    assert QaIndex().count() > 0
 
 
 def test_serve_mode_blocks_doc_editing(client, auth):
@@ -107,6 +195,26 @@ def test_save_and_list_qa(client, auth):
     # 목록에 답변 전문을 싣지 않는다 — 미리보기만 준다.
     assert "answer" not in page["items"][0]
     assert page["items"][0]["answer_preview"]
+
+
+def test_saving_keeps_which_model_made_the_draft(client, auth):
+    """검수자가 문구를 고쳐 저장해도 '어느 모델이 만든 초안인지'는 남아야 한다.
+
+    저장 요청(QaSaveRequest)에는 model_used 가 없다. 저장할 때마다 잃는 값이라
+    화면을 고쳐도 되돌릴 수 없어서 저장소가 지킨다.
+    """
+    item = qa_store.upsert_item(qa_store.QaItem(
+        qa_id="qa_ai", question="원래 질문", answer="초안", status="pending",
+        created_by="ai", model_used="gemma4:latest"))
+
+    client.post("/api/admin/qa", json={
+        "qa_id": item.qa_id, "question": "다듬은 질문", "answer": "다듬은 답변",
+        "status": "approved", "created_by": "ai",
+    }, headers=auth)
+
+    saved = qa_store.get_item("qa_ai")
+    assert saved.model_used == "gemma4:latest"
+    assert saved.question == "다듬은 질문"
 
 
 def test_bulk_disable_removes_from_index(client, auth):

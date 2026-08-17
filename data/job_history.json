@@ -1,0 +1,116 @@
+{
+  "records": [
+    {
+      "key": "evaluate",
+      "status": "done",
+      "started_at": "2026-08-17T10:29:37",
+      "finished_at": "2026-08-17T10:29:40",
+      "summary": "38문항 · 적중 100.0% · 오매칭 0.0%",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "total": 38
+      }
+    },
+    {
+      "key": "evaluate",
+      "status": "done",
+      "started_at": "2026-08-17T10:20:44",
+      "finished_at": "2026-08-17T10:20:45",
+      "summary": "38문항 · 적중 0.0% · 오매칭 0.0%",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "total": 38
+      }
+    },
+    {
+      "key": "apply",
+      "status": "done",
+      "started_at": "2026-08-17T10:19:38",
+      "finished_at": "2026-08-17T10:19:38",
+      "summary": "1건 반영",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "saved": 1
+      }
+    },
+    {
+      "key": "apply",
+      "status": "done",
+      "started_at": "2026-08-17T10:10:08",
+      "finished_at": "2026-08-17T10:10:08",
+      "summary": "8건 반영",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "saved": 8
+      }
+    },
+    {
+      "key": "generate",
+      "status": "done",
+      "started_at": "2026-08-17T09:35:41",
+      "finished_at": "2026-08-17T09:43:42",
+      "summary": "12건 생성 · 근거없음 1건",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "drafts": 12
+      }
+    },
+    {
+      "key": "apply",
+      "status": "done",
+      "started_at": "2026-08-17T09:28:23",
+      "finished_at": "2026-08-17T09:28:23",
+      "summary": "3건 반영 · 4점 미만 1건",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "saved": 3
+      }
+    },
+    {
+      "key": "generate",
+      "status": "stopped",
+      "started_at": "2026-08-17T09:20:40",
+      "finished_at": "2026-08-17T09:27:58",
+      "summary": "4건 생성",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "drafts": 4
+      }
+    },
+    {
+      "key": "index",
+      "status": "done",
+      "started_at": "2026-08-17T09:06:04",
+      "finished_at": "2026-08-17T09:07:00",
+      "summary": "QA 3건 · 문서 39건 · 324청크",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "docs": 39,
+        "chunks": 324,
+        "qa": 3
+      }
+    },
+    {
+      "key": "index",
+      "status": "done",
+      "started_at": "2026-08-17T08:58:39",
+      "finished_at": "2026-08-17T09:01:23",
+      "summary": "QA 3건 · 문서 39건 · 324청크",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "docs": 39,
+        "chunks": 324,
+        "qa": 3
+      }
+    }
+  ]
+}

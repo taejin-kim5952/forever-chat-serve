@@ -56,6 +56,12 @@ class QaItem(BaseModel):
     model_used: Optional[str] = None
     # 검수 메모. 보류한 이유를 남겨두지 않으면 다음 사람이 같은 판단을 반복한다.
     note: str = ""
+    # 생성 시 판정 모델이 매긴 점수(1~5)와 근거. **0 은 점수가 아니라 '채점하지 않음'**이다
+    # (app/studio/judge.py). 검수 화면이 낮은 점수부터 보여주는 근거이자, 검수자가 어디를
+    # 먼저 볼지 정하는 값이라 초안에서 여기까지 그대로 실어 나른다.
+    score: int = 0
+    judge_model: str = ""
+    judge_reason: str = ""
 
     def match_texts(self) -> list[str]:
         """벡터 인덱스에 올릴 문장들 — 대표 질문 + 변형 질문(중복·공백 제거)."""
@@ -120,6 +126,10 @@ def upsert_item(item: QaItem) -> QaItem:
                 # hit_count 는 답변과 별개로 운영에서 쌓이는 값이라 편집 저장이 덮어쓰면 안 된다.
                 item.hit_count = existing.hit_count
                 item.created_at = existing.created_at or now_iso()
+                # 검수 화면의 저장 요청(QaSaveRequest)에는 model_used 가 없다. 그대로 두면
+                # 검수자가 문구 하나만 고쳐도 "어느 모델이 만든 초안인지"가 사라진다.
+                # 저장할 때마다 잃는 값이라 화면을 고쳐도 되돌릴 수 없어서 저장소에서 지킨다.
+                item.model_used = item.model_used or existing.model_used
                 items[idx] = item
                 break
         else:

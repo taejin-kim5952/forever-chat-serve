@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1360">
+<title data-brand="관리자 · {service_name}">관리자 · API Manager 도우미</title>
+<!-- 운영이 폐쇄망이라 CDN(Pretendard) 링크는 걷어냈습니다. admin.css 의 font-family 가
+     NanumGothic → sans-serif 로 이어지므로 글꼴이 없어도 화면은 깨지지 않습니다. -->
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<!-- 모드: 서버가 serve | studio 로 내려줍니다 -->
+<body class="admin_body" data-mode="serve">
+
+<!-- 퍼블 산출물의 [DEV ONLY] 상태 목업 바는 이식하면서 걷어냈습니다(원본: `퍼블/admin.html`).
+     동작시키던 흉내 코드가 없어 누르면 아무 일도 일어나지 않는 버튼들이었습니다. -->
+
+<header class="admin_header">
+  <span class="qr_logo" data-brand="{organization}">KT</span>
+  <h1 class="admin_header_title" data-brand="{service_name} · 관리자">API Manager 도우미 · 관리자</h1>
+  <span class="admin_mode_badge is_serve" id="adminModeBadge">운영</span>
+  <div class="admin_header_right">
+    <a class="qr_pill qr_pill_outline" href="/">챗봇으로 이동</a>
+    <button type="button" class="qr_pill qr_pill_outline" id="adminLogout">로그아웃</button>
+  </div>
+</header>
+
+<div class="admin_shell">
+
+<!-- 좌측 사이드바 — 그룹은 라벨일 뿐, 접힐 수 없습니다 -->
+<nav class="admin_nav" id="adminNav" aria-label="관리자 메뉴">
+  <div class="admin_nav_home">
+    <button type="button" class="admin_nav_item is_active" data-tab="flow" aria-current="page">
+      <span class="admin_nav_item_txt">진행 현황</span>
+    </button>
+  </div>
+
+  <div class="admin_nav_group" data-nav-group="content">
+    <p class="admin_nav_group_label">콘텐츠</p>
+    <button type="button" class="admin_nav_item" data-tab="docs">
+      <span class="admin_nav_item_txt">RAG 문서</span>
+      <span class="admin_nav_spin" data-nav-spin="docs" aria-label="진행 중" hidden></span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="categories">
+      <span class="admin_nav_item_txt">질문 카테고리</span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="generate" data-studio-only>
+      <span class="admin_nav_item_txt">QA 생성</span>
+      <span class="admin_nav_spin" data-nav-spin="generate" aria-label="진행 중" hidden></span>
+      <span class="admin_nav_studio_mark" aria-hidden="true">✳</span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="review">
+      <span class="admin_nav_item_txt">검수</span>
+      <span class="admin_nav_badge" id="navReviewBadge" hidden>0</span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="qa">
+      <span class="admin_nav_item_txt">QA 인덱스</span>
+    </button>
+  </div>
+
+  <div class="admin_nav_group" data-nav-group="ops">
+    <p class="admin_nav_group_label">운영</p>
+    <button type="button" class="admin_nav_item" data-tab="history">
+      <span class="admin_nav_item_txt">질문 이력</span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="analytics">
+      <span class="admin_nav_item_txt">질문 분석</span>
+    </button>
+  </div>
+
+  <div class="admin_nav_group" data-nav-group="quality">
+    <p class="admin_nav_group_label">품질·설정</p>
+    <button type="button" class="admin_nav_item" data-tab="eval" data-studio-only>
+      <span class="admin_nav_item_txt">품질 평가</span>
+      <span class="admin_nav_spin" data-nav-spin="evaluate" aria-label="진행 중" hidden></span>
+      <span class="admin_nav_studio_mark" aria-hidden="true">✳</span>
+    </button>
+    <button type="button" class="admin_nav_item" data-tab="settings">
+      <span class="admin_nav_item_txt">설정</span>
+    </button>
+  </div>
+</nav>
+
+<main class="admin_main">
+
+<!-- ============================================================
+     진행 현황 (홈) — 여기서는 편집하지 않습니다
+     ============================================================ -->
+<section class="admin_panel is_active" id="panel_flow" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">진행 현황</h2>
+    <p class="admin_panel_desc">검수된 답변만 사용자에게 나갑니다. 지금 어디가 막혔는지 보여줍니다.</p>
+    <div class="admin_panel_head_right">
+      <span class="admin_card_sub">기준 <span id="flowAt">2026-08-16 09:40</span></span>
+      <button type="button" class="qr_pill qr_pill_outline" id="flowRefresh">새로고침</button>
+    </div>
+  </div>
+
+  <div class="admin_flow_steps" id="flowSteps"></div>
+
+  <div class="admin_flow_todo" id="flowTodo">
+    <span class="admin_flow_todo_txt"></span>
+    <button type="button" class="qr_pill qr_pill_accent" data-flow-go></button>
+  </div>
+
+  <!-- 작업 현황판 — 지금 무엇이 돌고 있나. 아무것도 없으면 통째로 숨깁니다 -->
+  <div class="admin_card admin_job" id="flowJob" hidden>
+    <div class="admin_job_head">
+      <span class="admin_job_title">
+        <span class="admin_job_spin" aria-hidden="true"></span>
+        <span class="admin_job_title_txt"></span>
+      </span>
+      <span class="admin_job_meta"></span>
+    </div>
+    <p class="admin_job_stage"></p>
+    <div class="admin_progress is_shown" id="flowJobProgress">
+      <span class="admin_progress_txt"></span>
+      <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+      <span class="admin_progress_pct">0%</span>
+    </div>
+    <p class="admin_job_offline" hidden>연결이 끊겼습니다. 다시 확인 중…</p>
+    <p class="admin_job_stopping" hidden>중지 요청됨 — 진행 중인 항목까지 마치고 멈춥니다</p>
+    <div class="admin_job_actions">
+      <button type="button" class="qr_pill qr_pill_outline" id="flowJobStop">중지</button>
+      <button type="button" class="qr_pill qr_pill_teal" id="flowJobGo"></button>
+    </div>
+  </div>
+
+  <div class="admin_card" id="flowJobHistoryCard" hidden>
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">최근 작업</h3>
+    </div>
+    <div id="flowJobHistory"></div>
+  </div>
+
+  <div class="admin_card" style="margin-top:14px;padding:0;" id="flowSummaryCard">
+    <div class="admin_card_head" style="margin:0;padding:12px 16px 0;">
+      <h3 class="admin_card_title">흐름 요약</h3>
+      <p class="admin_card_sub">단계 사이에서 걸러져 나간 것입니다.</p>
+    </div>
+    <div class="admin_flow_summary" id="flowSummary"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     검수 — 대기(pending) 한 건씩. 편집 폼은 QA 모달과 공용
+     ============================================================ -->
+<section class="admin_panel" id="panel_review" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">검수</h2>
+    <p class="admin_panel_desc">승인해야 사용자에게 나갑니다.</p>
+  </div>
+
+  <div class="admin_rev_queue">
+    <span class="admin_rev_queue_count">검수 대기 <span id="revQueueCount">0</span>건</span>
+    <span class="admin_cat_pop_wrap" data-cat-picker="revFilter">
+      <button type="button" class="admin_cat_trigger" data-cat-trigger aria-expanded="false">
+        <span aria-hidden="true">＃</span>
+        <span class="admin_cat_trigger_label">주제 전체</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+    </span>
+    <select class="admin_select" id="revSort" style="width:132px;height:28px;font-size:12px;" aria-label="정렬">
+      <option value="score_asc">점수 낮은순</option>
+      <option value="score_desc">점수 높은순</option>
+      <option value="recent">최근 생성순</option>
+      <option value="hit">적중 많은순</option>
+      <option value="fb_desc">👎 많은순</option>
+    </select>
+    <div class="admin_rev_queue_right">
+      <span class="admin_save_state" data-save-state="rev"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+      <span class="admin_rev_pos" id="revProgress">0 / 0</span>
+      <span class="admin_rev_bar"><span class="admin_rev_bar_fill" id="revBar"></span></span>
+    </div>
+  </div>
+
+  <p class="admin_notice is_warn admin_rev_note_ro">
+    운영에서는 이 항목을 조회만 할 수 있습니다.
+  </p>
+
+  <div class="admin_loading" data-loading="rev">
+    <div class="admin_skel is_w40"></div>
+    <div class="admin_skel is_row"></div>
+    <div class="admin_skel is_w90"></div>
+    <div class="admin_skel is_w70"></div>
+  </div>
+
+  <div class="admin_card admin_rev_body" id="revForm">
+    <div class="admin_editor" data-editor="rev"></div>
+  </div>
+
+  <div class="admin_empty" data-empty="rev">
+    <span class="admin_empty_ico" aria-hidden="true">✓</span>
+    <p class="admin_empty_title">검수할 항목이 없습니다</p>
+    <p class="admin_empty_desc">새 초안이 생기면 이곳에 쌓입니다.</p>
+    <button type="button" class="qr_pill qr_pill_teal admin_empty_action" data-goto-tab="generate">QA 생성으로 이동</button>
+  </div>
+
+  <div class="admin_rev_actions" id="revActions">
+    <button type="button" class="qr_pill qr_pill_outline" id="revPrev">◀ 이전</button>
+    <div class="admin_rev_actions_right">
+      <button type="button" class="qr_pill qr_pill_outline" id="revHold">보류</button>
+      <button type="button" class="qr_pill qr_pill_outline" id="revDisable">미사용</button>
+      <button type="button" class="qr_pill qr_pill_accent admin_rev_approve" id="revApproveNext">
+        <span class="qr_spinner" aria-hidden="true"></span>
+        <span>승인하고 다음 건 ▶</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ① 질문 이력
+     ============================================================ -->
+<section class="admin_panel" id="panel_history" role="tabpanel" aria-labelledby="tab_history">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">질문 이력</h2>
+    <p class="admin_panel_desc">사용자가 실제로 물어본 질문 원본입니다.</p>
+    <div class="admin_panel_head_right">
+      <button type="button" class="qr_pill qr_pill_outline" id="histExport">CSV 내려받기</button>
+    </div>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_filters" id="histFilters">
+      <select class="admin_select" id="histPeriod" style="width:120px;height:26px;font-size:12px;" aria-label="기간">
+        <option value="today">오늘</option>
+        <option value="7">최근 7일</option>
+        <option value="30" selected>최근 30일</option>
+        <option value="all">전체</option>
+        <option value="custom">직접 지정</option>
+      </select>
+      <input type="date" class="admin_input" id="histFrom" style="width:130px;height:26px;font-size:12px;" aria-label="시작일" hidden>
+      <input type="date" class="admin_input" id="histTo" style="width:130px;height:26px;font-size:12px;" aria-label="종료일" hidden>
+
+      <span class="admin_filters_sep" aria-hidden="true"></span>
+      <button type="button" class="admin_chip is_active" data-rt="">전체</button>
+      <button type="button" class="admin_chip" data-rt="answer">answer</button>
+      <button type="button" class="admin_chip" data-rt="related_docs">related_docs</button>
+      <button type="button" class="admin_chip" data-rt="unresolved">unresolved</button>
+      <button type="button" class="admin_chip" data-fb="down">👎만</button>
+
+      <span class="admin_filters_sep" aria-hidden="true"></span>
+      <div class="admin_cat_pop_wrap" data-cat-picker="hist">
+        <button type="button" class="admin_cat_trigger" data-cat-trigger aria-expanded="false">
+          <span aria-hidden="true">＃</span>
+          <span class="admin_cat_trigger_label">카테고리 전체</span>
+          <span aria-hidden="true">▾</span>
+        </button>
+      </div>
+
+      <div class="admin_filters_right">
+        <label class="admin_check"><input type="checkbox" id="histIncludeTest"> 테스트 질문 포함</label>
+        <div class="admin_search" data-search="hist">
+          <span class="admin_search_ico" aria-hidden="true">🔍</span>
+          <input type="text" class="admin_search_input" id="histSearch" placeholder="질문 검색" aria-label="질문 검색">
+          <button type="button" class="admin_search_clear" data-search-clear aria-label="검색어 지우기">✕</button>
+        </div>
+        <span class="admin_search_note">결과 없음</span>
+      </div>
+    </div>
+
+    <div class="admin_loading" data-loading="hist">
+      <div class="admin_skel is_row"></div><div class="admin_skel is_row"></div>
+      <div class="admin_skel is_row"></div><div class="admin_skel is_row"></div>
+    </div>
+
+    <div class="admin_table_wrap" data-table-wrap="hist">
+      <table class="admin_table" id="histTable">
+        <thead>
+          <tr>
+            <th class="admin_th_sort is_desc" data-sort="ts" style="width:110px;">시각</th>
+            <th data-col="q">질문</th>
+            <th style="width:110px;">결과 유형</th>
+            <th style="width:210px;">매칭된 QA</th>
+            <th class="admin_th_sort qr_num" data-sort="score" style="width:70px;">유사도</th>
+            <th data-col="fb" style="width:70px;">평가</th>
+            <th style="width:150px;">주제</th>
+            <th style="width:70px;">채널</th>
+          </tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+      <div class="admin_empty" data-empty="hist">
+        <span class="admin_empty_ico" aria-hidden="true">🗒</span>
+        <p class="admin_empty_title">아직 질문이 없습니다</p>
+        <p class="admin_empty_desc">사용자가 챗봇에 질문하면 이곳에 쌓입니다.</p>
+      </div>
+    </div>
+
+    <div class="admin_pager" data-pager="hist"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ② 질문 분석
+     ============================================================ -->
+<section class="admin_panel" id="panel_analytics" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">질문 분석</h2>
+    <p class="admin_panel_desc">비슷한 질문을 묶어 무엇을 더 만들어야 하는지 보여줍니다.</p>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">분석 실행</h3>
+      <div class="admin_card_right">
+        <select class="admin_select" id="anPeriod" style="width:120px;height:28px;font-size:12px;" aria-label="분석 기간">
+          <option value="7">최근 7일</option>
+          <option value="30" selected>최근 30일</option>
+          <option value="90">최근 90일</option>
+          <option value="all">전체</option>
+        </select>
+        <button type="button" class="qr_pill qr_pill_teal" id="anRunBtn">▶ 분석 실행</button>
+        <span class="admin_card_sub">마지막 실행 <span id="anLastRun">2026-08-14 09:12</span></span>
+      </div>
+    </div>
+    <div class="admin_progress" id="anProgress">
+      <span class="admin_progress_txt">대기 중</span>
+      <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+      <span class="admin_progress_pct">0%</span>
+      <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-progress-stop hidden>중지</button>
+    </div>
+  </div>
+
+  <div class="admin_kpis" id="anKpis"></div>
+
+  <div class="admin_card" style="margin-top:14px;">
+    <div class="admin_charts" id="anCharts">
+      <div class="admin_chart_box">
+        <h4 class="admin_chart_title">결과 유형 분포</h4>
+        <div data-chart="dist"></div>
+      </div>
+      <div class="admin_chart_box">
+        <h4 class="admin_chart_title">일자별 추이</h4>
+        <div data-chart="trend"></div>
+      </div>
+      <div class="admin_chart_box">
+        <h4 class="admin_chart_title">QA 없는 상위 주제</h4>
+        <div data-chart="topgap"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">질문 묶음</h3>
+      <span class="admin_card_sub" id="anCount"></span>
+    </div>
+
+    <div class="admin_filters">
+      <div class="admin_cat_pop_wrap" data-cat-picker="an">
+        <button type="button" class="admin_cat_trigger" data-cat-trigger aria-expanded="false">
+          <span aria-hidden="true">＃</span>
+          <span class="admin_cat_trigger_label">카테고리 전체</span>
+          <span aria-hidden="true">▾</span>
+        </button>
+      </div>
+      <span class="admin_filters_sep" aria-hidden="true"></span>
+      <button type="button" class="admin_chip is_active" data-anf="">전체</button>
+      <button type="button" class="admin_chip" data-anf="nogap">QA 없음</button>
+      <button type="button" class="admin_chip" data-anf="new">신규</button>
+      <button type="button" class="admin_chip" data-anf="applied">반영됨</button>
+
+      <div class="admin_filters_right">
+        <select class="admin_select" id="anSort" style="width:130px;height:26px;font-size:12px;" aria-label="정렬">
+          <option value="count">건수 많은 순</option>
+          <option value="hit">적중률 낮은 순</option>
+          <option value="recent">최근 순</option>
+        </select>
+        <div class="admin_menu_wrap">
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" id="anBulkBtn" aria-expanded="false" aria-haspopup="menu">작업 ▾</button>
+          <div class="admin_menu" role="menu" data-menu="an">
+            <p class="admin_menu_label">선택한 묶음</p>
+            <button type="button" class="admin_menu_item" data-act="topic">주제 지정</button>
+            <button type="button" class="admin_menu_item" data-act="exclude">제외 처리</button>
+            <button type="button" class="admin_menu_item" data-act="mark">QA 생성 대상으로 표시</button>
+            <div class="admin_menu_sep" data-studio-only></div>
+            <button type="button" class="admin_menu_item" data-act="gen" data-studio-only>QA 바로 생성</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin_table_wrap" data-table-wrap="an">
+      <table class="admin_table" id="anTable">
+        <thead>
+          <tr>
+            <th class="admin_col_check"><input type="checkbox" data-check-all="an" aria-label="전체 선택"></th>
+            <th style="width:26px;"></th>
+            <th>대표 질문</th>
+            <th class="qr_num" style="width:60px;">건수</th>
+            <th class="qr_num" style="width:66px;">적중률</th>
+            <th style="width:110px;">결과 유형</th>
+            <th style="width:150px;">주제</th>
+            <th style="width:96px;">상태</th>
+            <th style="width:70px;">작업</th>
+          </tr>
+        </thead>
+        <tbody id="anBody"></tbody>
+      </table>
+      <div class="admin_empty" data-empty="an">
+        <span class="admin_empty_ico" aria-hidden="true">◌</span>
+        <p class="admin_empty_title">묶인 질문이 없습니다</p>
+        <p class="admin_empty_desc">분석을 실행하면 비슷한 질문끼리 묶입니다.</p>
+        <button type="button" class="qr_pill qr_pill_teal admin_empty_action" data-run-analysis>분석 실행</button>
+      </div>
+    </div>
+    <div class="admin_pager" data-pager="an"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ③ 질문 카테고리
+     ============================================================ -->
+<section class="admin_panel" id="panel_categories" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">질문 카테고리</h2>
+    <p class="admin_panel_desc">챗봇에서 사용자가 고르는 주제입니다. 대분류 → 카테고리 2단계입니다.</p>
+  </div>
+
+  <div class="admin_card" id="quickCard">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">자주 찾는 주제</h3>
+      <p class="admin_card_sub">챗봇 첫 화면에 이 순서로 노출됩니다.</p>
+      <div class="admin_card_right">
+        <span class="admin_dirty">변경됨</span>
+        <span class="admin_quick_count" id="quickCount">0 / 6</span>
+        <button type="button" class="qr_pill qr_pill_teal qr_pill_sm" id="quickSave">저장</button>
+        <span class="admin_save_state" data-save-state="quick"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+      </div>
+    </div>
+    <div class="admin_tag_list" id="quickChips"></div>
+    <p class="admin_field_hint" id="quickHint" hidden>6개가 모두 채워졌습니다. 바꾸려면 먼저 하나를 제거해 주세요.</p>
+  </div>
+
+  <div class="admin_card_split">
+    <div class="admin_card">
+      <div class="admin_card_head">
+        <h3 class="admin_card_title">카테고리</h3>
+        <div class="admin_card_right">
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" id="catAddGroup">+ 대분류</button>
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" id="catAddItem">+ 카테고리</button>
+        </div>
+      </div>
+      <div class="admin_search" data-search="cat" style="width:100%;margin-bottom:10px;">
+        <span class="admin_search_ico" aria-hidden="true">🔍</span>
+        <input type="text" class="admin_search_input" id="catSearch" placeholder="카테고리 검색" aria-label="카테고리 검색">
+        <button type="button" class="admin_search_clear" data-search-clear aria-label="검색어 지우기">✕</button>
+      </div>
+      <div class="admin_tree" id="catTree"></div>
+    </div>
+
+    <div class="admin_card" id="catDetail">
+      <div class="admin_empty is_shown" data-empty="cat">
+        <span class="admin_empty_ico" aria-hidden="true">☰</span>
+        <p class="admin_empty_title">카테고리를 선택해 주세요</p>
+        <p class="admin_empty_desc">왼쪽 목록에서 항목을 고르면 상세를 편집할 수 있습니다.</p>
+      </div>
+      <div data-cat-form hidden>
+        <div class="admin_card_head">
+          <h3 class="admin_card_title">선택한 카테고리 상세</h3>
+          <div class="admin_card_right">
+            <span class="admin_dirty">변경됨</span>
+            <span class="admin_save_state" data-save-state="cat"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+          </div>
+        </div>
+
+        <div class="admin_field">
+          <label for="catGroupSel">대분류</label>
+          <select class="admin_select" id="catGroupSel"></select>
+        </div>
+        <div class="admin_field">
+          <label for="catName">이름</label>
+          <input type="text" class="admin_input" id="catName">
+        </div>
+        <div class="admin_field">
+          <label for="catId">ID</label>
+          <input type="text" class="admin_input" id="catId" readonly>
+          <p class="admin_field_hint">등록 후에는 변경할 수 없습니다.</p>
+        </div>
+        <div class="admin_field">
+          <label>노출</label>
+          <label class="admin_switch">
+            <input type="checkbox" id="catUsed" checked>
+            <span class="admin_switch_track"></span>
+            <span class="admin_switch_txt">사용</span>
+          </label>
+        </div>
+
+        <hr class="admin_hr">
+
+        <div class="admin_modal_section_head">
+          <h4 class="admin_modal_section_title">추천 질문 <span class="admin_rows_count" id="catQCount">(0)</span></h4>
+          <div class="admin_modal_section_right">
+            <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" id="catQAdd">+ 추가</button>
+          </div>
+        </div>
+        <div class="admin_rows is_short" id="catQuestions" data-reorder-kind="question"></div>
+
+        <div class="admin_modal_foot" style="margin:14px -16px -16px;">
+          <button type="button" class="qr_pill qr_pill_danger" id="catDelete">삭제</button>
+          <div class="admin_modal_foot_right">
+            <button type="button" class="qr_pill qr_pill_outline" id="catCancel">취소</button>
+            <button type="button" class="qr_pill qr_pill_teal" id="catSave">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ④ QA 인덱스
+     ============================================================ -->
+<section class="admin_panel" id="panel_qa" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">QA 인덱스</h2>
+    <p class="admin_panel_desc">사용자에게 실제로 나가는 답변입니다.</p>
+  </div>
+
+  <div class="admin_notice" data-serve-only>
+    운영에서는 QA 항목을 조회만 할 수 있습니다. 편집과 검수는 스튜디오에서 진행합니다.
+  </div>
+
+  <div class="admin_summary" id="qaSummary"></div>
+
+  <div class="admin_card">
+    <div class="admin_filters" id="qaFilters">
+      <div class="admin_cat_pop_wrap" data-cat-picker="qa">
+        <button type="button" class="admin_cat_trigger" data-cat-trigger aria-expanded="false">
+          <span aria-hidden="true">＃</span>
+          <span class="admin_cat_trigger_label">카테고리 전체</span>
+          <span aria-hidden="true">▾</span>
+        </button>
+      </div>
+      <span class="admin_filters_sep" aria-hidden="true"></span>
+      <button type="button" class="admin_chip is_active" data-qaf="">전체</button>
+      <button type="button" class="admin_chip" data-qaf="wait">검수대기</button>
+      <button type="button" class="admin_chip" data-qaf="hold">보류</button>
+      <button type="button" class="admin_chip" data-qaf="unused">미사용</button>
+
+      <div class="admin_filters_right">
+        <div class="admin_search" data-search="qa">
+          <span class="admin_search_ico" aria-hidden="true">🔍</span>
+          <input type="text" class="admin_search_input" id="qaSearch" placeholder="질문 · 답변 검색" aria-label="QA 검색">
+          <button type="button" class="admin_search_clear" data-search-clear aria-label="검색어 지우기">✕</button>
+        </div>
+        <span class="admin_search_note">결과 없음</span>
+        <select class="admin_select" id="qaSort" style="width:130px;height:26px;font-size:12px;" aria-label="정렬">
+          <option value="hit">적중 많은 순</option>
+          <option value="variants">변형 많은 순</option>
+          <option value="recent">최근 수정 순</option>
+        </select>
+        <div class="admin_menu_wrap" data-studio-only>
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" id="qaBulkBtn" aria-expanded="false" aria-haspopup="menu">작업 ▾</button>
+          <div class="admin_menu" role="menu" data-menu="qa">
+            <p class="admin_menu_label">선택한 항목</p>
+            <button type="button" class="admin_menu_item" data-act="approve">검수 완료 처리</button>
+            <button type="button" class="admin_menu_item" data-act="hold">보류</button>
+            <button type="button" class="admin_menu_item" data-act="topic">주제 지정</button>
+            <button type="button" class="admin_menu_item" data-act="unuse">사용 안 함</button>
+            <div class="admin_menu_sep"></div>
+            <button type="button" class="admin_menu_item is_danger" data-act="delete">삭제</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin_table_wrap" data-table-wrap="qa">
+      <table class="admin_table" id="qaTable">
+        <thead>
+          <tr>
+            <th class="admin_col_check" data-studio-only><input type="checkbox" data-check-all="qa" aria-label="전체 선택"></th>
+            <th style="width:270px;">대표 질문</th>
+            <th>답변 미리보기</th>
+            <th style="width:150px;">주제</th>
+            <th class="admin_th_sort qr_num" data-sort="variants" style="width:56px;">변형</th>
+            <th class="admin_th_sort is_desc qr_num" data-sort="hit" style="width:60px;">적중</th>
+            <th style="width:86px;">상태</th>
+          </tr>
+        </thead>
+        <tbody id="qaBody"></tbody>
+      </table>
+      <div class="admin_empty" data-empty="qa">
+        <span class="admin_empty_ico" aria-hidden="true">◍</span>
+        <p class="admin_empty_title">QA 항목이 없습니다</p>
+        <p class="admin_empty_desc">조건을 바꾸거나 스튜디오에서 QA를 생성해 주세요.</p>
+      </div>
+    </div>
+    <div class="admin_pager" data-pager="qa"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ⑤ RAG 문서
+     ============================================================ -->
+<section class="admin_panel" id="panel_docs" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">RAG 문서</h2>
+    <p class="admin_panel_desc">QA를 만들 때 근거가 되는 원본 문서입니다.</p>
+    <div class="admin_panel_head_right">
+      <!-- 문서 작성 형식 안내. 모드와 무관하게 보입니다 — 운영에서도 "왜 이 문서는 검색이
+           안 되지"를 확인할 때 봅니다. 내용은 서버를 부르지 않는 고정 안내입니다. -->
+      <button type="button" class="qr_pill qr_pill_outline" id="docGuideBtn">가이드 문서 작성 형식</button>
+      <!-- 폴더 업로드 — 퍼블 산출물에 없는 영역입니다. 모달은 파일 끝에 함께 있습니다. -->
+      <button type="button" class="qr_pill qr_pill_outline" id="docUploadBtn" data-studio-only>폴더 등록</button>
+      <input type="file" id="docUploadInput" webkitdirectory directory multiple hidden>
+      <button type="button" class="qr_pill qr_pill_teal" id="docNewBtn" data-studio-only>+ 새 문서</button>
+    </div>
+  </div>
+
+  <div class="admin_notice" data-serve-only>
+    운영에서는 문서를 조회만 할 수 있습니다. 편집은 스튜디오에서 진행합니다.
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_filters">
+      <div class="admin_search" data-search="doc">
+        <span class="admin_search_ico" aria-hidden="true">🔍</span>
+        <input type="text" class="admin_search_input" id="docSearch" placeholder="문서 검색" aria-label="문서 검색">
+        <button type="button" class="admin_search_clear" data-search-clear aria-label="검색어 지우기">✕</button>
+      </div>
+      <span class="admin_search_note">결과 없음</span>
+    </div>
+
+    <div class="admin_table_wrap" data-table-wrap="doc">
+      <table class="admin_table" id="docTable">
+        <thead>
+          <tr>
+            <th style="width:210px;">문서 ID</th>
+            <th>제목</th>
+            <th style="width:170px;">카테고리</th>
+            <th style="width:100px;">수정일</th>
+            <th class="qr_num" style="width:70px;">청크</th>
+            <th class="qr_num" style="width:86px;">연결 QA</th>
+            <th style="width:110px;">작업</th>
+          </tr>
+        </thead>
+        <tbody id="docBody"></tbody>
+      </table>
+      <div class="admin_empty" data-empty="doc">
+        <span class="admin_empty_ico" aria-hidden="true">📄</span>
+        <p class="admin_empty_title">문서가 없습니다</p>
+        <p class="admin_empty_desc">스튜디오에서 문서를 등록해 주세요.</p>
+      </div>
+    </div>
+    <div class="admin_pager" data-pager="doc"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ⑥ QA 생성 (studio 전용)
+     ============================================================ -->
+<section class="admin_panel" id="panel_generate" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">QA 생성</h2>
+    <p class="admin_panel_desc">문서나 미커버 질문에서 QA 항목을 만들어냅니다.</p>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_card_head"><h3 class="admin_card_title">생성 대상</h3></div>
+    <div class="admin_radio_rows" id="genTargetRadio">
+      <label class="admin_radio_row">
+        <input type="radio" name="genTarget" value="docs">
+        <span>RAG 문서에서</span>
+        <select class="admin_select" id="genDocSel" multiple size="1" style="width:250px;height:30px;font-size:12px;" aria-label="문서 선택"></select>
+      </label>
+      <label class="admin_radio_row">
+        <input type="radio" name="genTarget" value="category">
+        <span>카테고리에서</span>
+        <span class="admin_cat_pop_wrap" data-cat-picker="gen">
+          <button type="button" class="admin_cat_trigger" data-cat-trigger aria-expanded="false">
+            <span aria-hidden="true">＃</span>
+            <span class="admin_cat_trigger_label">카테고리 선택</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+        </span>
+      </label>
+      <label class="admin_radio_row">
+        <input type="radio" name="genTarget" value="uncovered" checked>
+        <span>분석에서 표시한 미커버 질문 <strong id="genUncoveredCount">37</strong>건</span>
+      </label>
+    </div>
+
+    <hr class="admin_hr">
+
+    <!-- 역할별 모델 — 퍼블 산출물에 없는 영역입니다(요청서 02 이후에 생긴 기능).
+         질문·변형과 답변에 성질이 다른 모델이 유리하고(app/core/config.py 실측 주석),
+         채점은 답변 모델과 **달라야** 자기 채점 편향을 피합니다(app/studio/judge.py).
+         다음 산출물을 받을 때 이 블록을 함께 옮기세요. -->
+    <div class="admin_gen_opts">
+      <div class="admin_field">
+        <label for="genQuestionModel">질문·변형 모델</label>
+        <select class="admin_select" id="genQuestionModel"></select>
+      </div>
+      <div class="admin_field">
+        <label for="genAnswerModel">답변 모델</label>
+        <select class="admin_select" id="genAnswerModel"></select>
+      </div>
+      <div class="admin_field">
+        <label for="genJudgeModel">채점 모델</label>
+        <select class="admin_select" id="genJudgeModel"></select>
+        <p class="admin_field_hint" id="genJudgeHint"></p>
+      </div>
+    </div>
+
+    <div class="admin_gen_opts">
+      <!-- 역할 분리 전의 `#genModel`(생성 모델 하나)은 지웠습니다. hidden 으로 남겨 둬도
+           읽는 코드가 없어 다음 사람이 "이건 뭐지"로 시간을 씁니다. -->
+      <div class="admin_field">
+        <label for="genVariants">항목당 변형 질문 수</label>
+        <input type="number" class="admin_input" id="genVariants" value="10" min="1" max="30">
+      </div>
+    </div>
+    <!-- '답 없는 질문 비율' 은 여기 있으면 안 되는 값이라 뺐습니다. 1차 프로젝트에서 그것은
+         **평가셋**을 만들 때 쓰던 값입니다(근거가 없는 질문을 섞어, 답하지 않고 넘기는지 확인).
+         이 프로젝트의 생성은 사용자에게 나갈 QA를 만드는 자리이고, 답이 없는 질문은 QA가
+         될 수 없습니다. 필요한 것은 탭 ⑦(품질 평가)의 문항이며 아직 이식하지 않았습니다. -->
+
+    <div class="admin_progress" id="genProgress">
+      <span class="admin_progress_txt">대기 중</span>
+      <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+      <span class="admin_progress_pct">0%</span>
+    </div>
+
+    <div class="admin_card_head" style="margin:14px 0 0;">
+      <div class="admin_card_right">
+        <span class="admin_save_state" data-save-state="gen"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+        <button type="button" class="qr_pill qr_pill_teal" id="genRunBtn">생성 시작</button>
+        <button type="button" class="qr_pill qr_pill_outline" id="genStopBtn" disabled>중지</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">생성 결과 <span class="admin_card_sub">(미저장)</span></h3>
+      <div class="admin_card_right">
+        <span class="admin_rows_count" id="genSelCount">0개 선택</span>
+        <button type="button" class="qr_pill qr_pill_accent" id="genApplyBtn" disabled>선택 항목을 QA 인덱스에 추가</button>
+      </div>
+    </div>
+    <div class="admin_table_wrap is_compact" data-table-wrap="gen">
+      <table class="admin_table" id="genResultTable">
+        <thead>
+          <tr>
+            <th class="admin_col_check"><input type="checkbox" data-check-all="gen" aria-label="전체 선택"></th>
+            <th style="width:280px;">질문</th>
+            <th>답변 미리보기</th>
+            <th style="width:150px;">주제</th>
+            <th class="qr_num" style="width:56px;">변형</th>
+          </tr>
+        </thead>
+        <tbody id="genResultBody"></tbody>
+      </table>
+      <div class="admin_empty is_shown" data-empty="gen">
+        <span class="admin_empty_ico" aria-hidden="true">✳</span>
+        <p class="admin_empty_title">아직 생성하지 않았습니다</p>
+        <p class="admin_empty_desc">대상과 옵션을 고르고 생성을 시작해 주세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ⑦ 품질 평가 (studio 전용)
+     ============================================================ -->
+<section class="admin_panel" id="panel_eval" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">품질 평가</h2>
+    <p class="admin_panel_desc">QA 인덱스가 얼마나 잘 찾아지는지 측정합니다.</p>
+  </div>
+
+  <div class="admin_card">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">평가 실행</h3>
+      <div class="admin_card_right">
+        <label class="admin_check" style="gap:8px;">평가 문항 수
+          <input type="number" class="admin_input" id="evalCount" value="200" min="10" max="2000" style="width:80px;height:28px;">
+        </label>
+        <!-- 이 평가는 LLM을 부르지 않습니다. 문항을 벡터로 바꿔 검색해 보는 것이므로
+             결과를 좌우하는 것은 **임베딩 모델**입니다. 고를 수 있는 값이 아니라
+             (색인할 때 쓴 모델과 같아야 합니다) 무엇으로 쟀는지만 보여줍니다. -->
+        <span class="admin_card_sub">임베딩 <b id="evalEmbedModel">—</b></span>
+        <button type="button" class="qr_pill qr_pill_teal" id="evalRunBtn">평가 실행</button>
+      </div>
+    </div>
+    <div class="admin_progress" id="evalProgress">
+      <span class="admin_progress_txt">대기 중</span>
+      <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+      <span class="admin_progress_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="admin_summary" id="evalSummary" style="grid-template-columns:repeat(4,1fr);" hidden></div>
+
+  <div class="admin_card">
+    <div class="admin_card_head"><h3 class="admin_card_title">문항별 결과</h3></div>
+    <div class="admin_table_wrap" data-table-wrap="eval">
+      <table class="admin_table" id="evalTable">
+        <thead>
+          <tr>
+            <th>질문</th>
+            <th style="width:230px;">기대 QA</th>
+            <th style="width:230px;">실제 매칭된 QA</th>
+            <th class="qr_num" style="width:70px;">유사도</th>
+            <th style="width:86px;">판정</th>
+          </tr>
+        </thead>
+        <tbody id="evalBody"></tbody>
+      </table>
+      <div class="admin_empty is_shown" data-empty="eval">
+        <span class="admin_empty_ico" aria-hidden="true">◎</span>
+        <p class="admin_empty_title">아직 평가를 실행하지 않았습니다</p>
+        <p class="admin_empty_desc">문항 수와 판정 모델을 고르고 실행해 주세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ⑧ 설정
+     ============================================================ -->
+<section class="admin_panel" id="panel_settings" role="tabpanel">
+  <div class="admin_panel_head">
+    <h2 class="admin_panel_title">설정</h2>
+  </div>
+
+  <div class="admin_subtabs" id="settingsSubtabs" role="tablist" aria-label="설정 하위 메뉴">
+    <button type="button" class="admin_subtab is_active" data-subtab="matching" role="tab" aria-selected="true">매칭</button>
+    <button type="button" class="admin_subtab" data-subtab="generation" role="tab" aria-selected="false" data-studio-only>생성<span class="admin_nav_studio_mark" aria-hidden="true">✳</span></button>
+    <button type="button" class="admin_subtab" data-subtab="profile" role="tab" aria-selected="false">납품처</button>
+  </div>
+
+  <div class="admin_subpanel is_active" id="subpanel_matching">
+  <div class="admin_card" id="thCard">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">매칭 설정</h3>
+      <div class="admin_card_right">
+        <span class="admin_dirty">변경됨</span>
+        <span class="admin_save_state" data-save-state="th"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+        <button type="button" class="qr_pill qr_pill_outline" id="thResetBtn">기본값</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="thSave">저장</button>
+      </div>
+    </div>
+
+    <div class="admin_range_row">
+      <span class="admin_range_label">답변 매칭 임계값 <span class="admin_default_badge">기본값 0.90</span>
+        <small>이 값 이상이면 답변을 그대로 보여줍니다.</small></span>
+      <input type="text" class="admin_range_val" id="thMatchVal" value="0.90" inputmode="decimal" aria-label="답변 매칭 임계값">
+      <input type="range" class="admin_range" id="thMatch" min="0.5" max="1" step="0.01" value="0.90">
+    </div>
+    <div class="admin_range_row">
+      <span class="admin_range_label">관련 문서 하한 <span class="admin_default_badge">기본값 0.55</span>
+        <small>이 값 미만이면 답을 하지 않습니다(미해결).</small></span>
+      <input type="text" class="admin_range_val" id="thRelatedVal" value="0.55" inputmode="decimal" aria-label="관련 문서 하한">
+      <input type="range" class="admin_range" id="thRelated" min="0.3" max="1" step="0.01" value="0.55">
+    </div>
+
+    <div class="admin_zone" id="thZoneBar">
+      <span class="admin_zone_seg is_unresolved" data-zone="unresolved">미해결</span>
+      <span class="admin_zone_seg is_related" data-zone="related">관련 문서만</span>
+      <span class="admin_zone_seg is_answer" data-zone="answer">답변</span>
+    </div>
+    <div class="admin_zone_scale"><span>0.00</span><span id="thZoneA">0.55</span><span id="thZoneB">0.90</span><span>1.00</span></div>
+
+    <p class="admin_notice is_warn admin_zone_warn" id="thZoneWarn">
+      관련 문서 하한이 답변 매칭 임계값보다 크거나 같습니다. 값을 조정해 주세요.
+    </p>
+
+    <hr class="admin_hr">
+
+    <div class="admin_range_row" style="grid-template-columns:180px 64px;">
+      <span class="admin_range_label">관련 문서 표시 개수 <span class="admin_default_badge">기본값 3</span>
+        <small>답변을 못 찾았을 때 보여줄 문서 수입니다.</small></span>
+      <input type="number" class="admin_range_val" id="thRelatedCount" value="3" min="1" max="5">
+    </div>
+  </div>
+
+  </div><!-- /#subpanel_matching -->
+
+  <div class="admin_subpanel" id="subpanel_generation" data-studio-only>
+  <div class="admin_card">
+    <div class="admin_card_head">
+      <h3 class="admin_card_title">생성 설정</h3>
+      <p class="admin_card_sub">스튜디오 전용</p>
+    </div>
+    <!-- 여기는 **읽기 전용**입니다. 이 값들은 `.env` 에서 오고 기동할 때 고정되므로
+         화면에서 고칠 수 없습니다(임계값 탭과 다릅니다 — 그쪽은 매 요청 다시 읽습니다).
+         입력칸으로 두면 고칠 수 있다고 오해하고, 저장 버튼이 없어 한참 찾게 됩니다. -->
+    <div class="admin_gen_opts">
+      <div class="admin_field">
+        <label>질문·변형 모델</label>
+        <p class="admin_readonly_val" id="setQuestionModel">—</p>
+      </div>
+      <div class="admin_field">
+        <label>답변 모델</label>
+        <p class="admin_readonly_val" id="setAnswerModel">—</p>
+      </div>
+      <div class="admin_field">
+        <label>채점 모델</label>
+        <p class="admin_readonly_val" id="setJudgeModel">—</p>
+      </div>
+      <div class="admin_field">
+        <label>컨텍스트 창</label>
+        <p class="admin_readonly_val" id="setCtx">—</p>
+      </div>
+      <div class="admin_field">
+        <label>답변 최대 길이</label>
+        <p class="admin_readonly_val" id="setMaxLen">—</p>
+      </div>
+    </div>
+    <p class="admin_field_hint">
+      <code>.env</code> 의 <code>OLLAMA_*</code> 에서 옵니다. 바꾸려면 파일을 고치고 서버를 다시 띄우세요.
+    </p>
+  </div>
+  </div><!-- /#subpanel_generation -->
+
+  <div class="admin_subpanel" id="subpanel_profile">
+    <div class="admin_card">
+      <div class="admin_card_head">
+        <h3 class="admin_card_title">납품처</h3>
+        <p class="admin_card_sub">화면에 보이는 조직 · 서비스 이름입니다.</p>
+        <div class="admin_card_right">
+          <span class="admin_dirty">변경됨</span>
+          <span class="admin_save_state" data-save-state="prof"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+          <button type="button" class="qr_pill qr_pill_teal" id="profSave">저장</button>
+        </div>
+      </div>
+
+      <div class="admin_prof_grid">
+        <div class="admin_field">
+          <label for="profOrg">조직 이름</label>
+          <span class="admin_prof_logo_row">
+            <input type="text" class="admin_input" id="profOrg" value="KT" maxlength="8">
+            <span class="admin_prof_logo_prev" id="profLogoPreview" aria-hidden="true">KT</span>
+          </span>
+          <p class="admin_field_hint">로고에 들어갑니다. 4자를 넘으면 잘립니다</p>
+        </div>
+        <div class="admin_field">
+          <label for="profName">서비스 이름</label>
+          <input type="text" class="admin_input" id="profName" value="API Manager 도우미">
+          <p class="admin_field_hint">화면 제목과 브라우저 탭에 쓰입니다</p>
+        </div>
+        <div class="admin_field">
+          <label for="profDesc">한 줄 소개</label>
+          <input type="text" class="admin_input" id="profDesc" value="API 등록 · 그룹 · 템플릿">
+          <p class="admin_field_hint">챗봇 화면 상단에 보입니다</p>
+        </div>
+        <div class="admin_field">
+          <label for="profDomain">도메인 소개</label>
+          <input type="text" class="admin_input" id="profDomain" value="API 등록과 운영">
+          <p class="admin_field_hint">AI가 QA를 만들 때 쓰는 소개입니다. “…를 담당하는 도우미입니다” 앞에 들어갑니다</p>
+        </div>
+        <div class="admin_field">
+          <label for="profLang">언어</label>
+          <select class="admin_select" id="profLang">
+            <option value="ko" selected>한국어</option>
+            <option value="etc">그 외</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div><!-- /#subpanel_profile -->
+</section>
+
+</main>
+</div>
+
+<!-- ============================================================
+     모달
+     ============================================================ -->
+
+<!-- ① 이력 상세 -->
+<div class="qr_modal_backdrop" id="histModal">
+  <div class="qr_modal" role="dialog" aria-modal="true" aria-labelledby="histModalTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="histModalTitle">질문 상세</h3>
+      <div class="admin_modal_head_right">
+        <span data-bind="result_type"></span>
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <dl class="admin_dl" style="margin-bottom:14px;">
+        <dt>시각</dt><dd data-bind="ts"></dd>
+        <dt>채널</dt><dd data-bind="channel"></dd>
+        <dt>선택한 주제</dt><dd data-bind="category"></dd>
+        <dt>유사도</dt><dd data-bind="score"></dd>
+        <dt>매칭된 QA</dt><dd data-bind="matched"></dd>
+        <dt>접수번호</dt><dd data-bind="ticket"></dd>
+      </dl>
+      <div class="admin_modal_section">
+        <div class="admin_modal_section_head"><h4 class="admin_modal_section_title">질문 전문</h4></div>
+        <div class="admin_bubble" data-bind="question" style="border-top-left-radius:var(--qr-radius);border-top-right-radius:2px;background:var(--qr-teal-bg);color:#1c5f63;"></div>
+      </div>
+      <div class="admin_modal_section">
+        <div class="admin_modal_section_head"><h4 class="admin_modal_section_title">실제로 반환된 답변</h4></div>
+        <div class="admin_bubble" data-bind="answer_bubble"></div>
+      </div>
+    </div>
+    <div class="admin_modal_foot">
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>닫기</button>
+        <button type="button" class="qr_pill qr_pill_teal" data-open-qa>매칭된 QA 열기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ④ QA 검수 (와이드) -->
+<div class="qr_modal_backdrop" id="qaModal">
+  <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="qaModalTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="qaModalTitle">QA 항목 검수</h3>
+      <div class="admin_modal_head_right">
+        <span class="admin_dirty">변경됨</span>
+        <span class="admin_save_state" data-save-state="qa"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+
+    <div class="admin_modal_bar">
+      <span class="admin_modal_bar_item">상태
+        <select class="admin_select" id="qaStatus" style="width:110px;height:28px;font-size:12px;">
+          <option value="wait">검수대기</option>
+          <option value="done">검수완료</option>
+          <option value="hold">보류</option>
+          <option value="unused">미사용</option>
+        </select>
+      </span>
+    </div>
+
+    <div class="admin_modal_body">
+      <div class="admin_editor" data-editor="qa"></div>
+    </div>
+
+    <div class="admin_modal_foot">
+      <button type="button" class="qr_pill qr_pill_danger" id="qaDiscardBtn">폐기</button>
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>취소</button>
+        <button type="button" class="qr_pill qr_pill_outline" id="qaSaveBtn">저장</button>
+        <button type="button" class="qr_pill qr_pill_accent" id="qaApproveBtn">저장 후 승인</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ 문서 편집 / 보기 (와이드) -->
+<div class="qr_modal_backdrop" id="docModal">
+  <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="docModalTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="docModalTitle">문서 편집</h3>
+      <div class="admin_modal_head_right">
+        <span class="admin_dirty">변경됨</span>
+        <span class="admin_save_state" data-save-state="doc"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <div class="admin_field" style="max-width:420px;">
+        <label for="docId">문서 ID</label>
+        <input type="text" class="admin_input" id="docId">
+      </div>
+      <div class="admin_field" style="max-width:420px;">
+        <label for="docTitle">제목</label>
+        <input type="text" class="admin_input" id="docTitle">
+      </div>
+      <div class="admin_field">
+        <label for="docEditor">본문 (마크다운)</label>
+        <textarea class="admin_textarea" id="docEditor" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="admin_modal_foot">
+      <button type="button" class="qr_pill qr_pill_danger" id="docDeleteBtn" data-studio-only>삭제</button>
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>닫기</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="docSaveBtn" data-studio-only>저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 대분류 추가·수정 -->
+<div class="qr_modal_backdrop" id="catGroupModal">
+  <div class="qr_modal qr_modal_sm" role="dialog" aria-modal="true" aria-labelledby="catGroupModalTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="catGroupModalTitle">대분류 추가</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <div class="admin_field">
+        <label for="catGroupName">이름</label>
+        <input type="text" class="admin_input" id="catGroupName">
+      </div>
+      <div class="admin_field">
+        <label for="catGroupId">ID</label>
+        <input type="text" class="admin_input" id="catGroupId" placeholder="g_xxx">
+      </div>
+      <div class="admin_field">
+        <label>노출</label>
+        <label class="admin_switch">
+          <input type="checkbox" id="catGroupUsed" checked>
+          <span class="admin_switch_track"></span>
+          <span class="admin_switch_txt">사용</span>
+        </label>
+      </div>
+      <p class="admin_notice is_warn" id="catGroupWarn" hidden>
+        하위 카테고리 <strong data-bind="child_count">0</strong>개가 함께 사라집니다.
+      </p>
+    </div>
+    <div class="admin_modal_foot">
+      <button type="button" class="qr_pill qr_pill_danger" id="catGroupDelete" hidden>삭제</button>
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>취소</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="catGroupSave">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     가이드 문서 작성 형식 — 퍼블 산출물에 없는 모달입니다.
+     내용은 고정 안내라 서버를 부르지 않습니다. 숫자 하나(길이 상한)만 설정에서 채웁니다.
+     ============================================================ -->
+<div class="qr_modal_backdrop" id="docGuideModal">
+  <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="docGuideTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="docGuideTitle">가이드 문서 작성 형식</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body admin_guide">
+      <p class="admin_guide_lead">
+        챗봇은 문서를 통째로 읽지 않고 <b>소제목 단위로 잘라서</b> 찾습니다.
+        그래서 <b>검색에 좋은 문서 = 사람이 읽기 좋은 문서</b> 입니다.
+      </p>
+
+      <h4>1. 길이는 문서가 아니라 '절' 기준입니다</h4>
+      <p>문서 전체는 아무리 길어도 괜찮습니다. 잘리는 단위는
+        <code>##</code> · <code>###</code> 소제목 사이입니다.</p>
+      <div class="admin_table_wrap">
+        <table class="admin_table">
+          <thead><tr><th style="width:170px;">한 절의 길이</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td>120자 미만</td><td>너무 짧습니다. QA 생성에서 빠지고, 엉뚱한 질문에도 걸립니다</td></tr>
+            <tr><td><b>200~800자</b></td><td><b>가장 좋습니다</b></td></tr>
+            <tr><td>800 ~ <span id="guideWarnChars">1,800</span>자</td><td>동작합니다. 한 절에 주제가 여럿이면 검색이 흐려집니다</td></tr>
+            <tr><td>그 이상</td><td>뒷부분이 <b>조용히 버려집니다</b>. 소제목을 넣어 나눠 주세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>2. 이렇게 써 주세요</h4>
+      <ul>
+        <li><b>소제목을 자주 답니다.</b> 그것이 곧 검색 단위이고, 답변에 "이 문서의 이 절"로 표시됩니다</li>
+        <li><b>한 절에 한 주제.</b> '등록 절차'와 '필수 항목'을 한 절에 섞으면 필수 항목을 묻는 질문이 묻힙니다</li>
+        <li><b>표가 길어지면 나눕니다.</b> 표 앞에 한두 문장으로 무엇에 대한 표인지 적어 주세요</li>
+        <li><b>맨 위 앞머리를 채웁니다.</b> <code>title</code> · <code>category</code> 가 검색 결과 카드에 그대로 나옵니다</li>
+      </ul>
+
+      <h4>3. 파일 형식</h4>
+      <ul>
+        <li>마크다운(<code>.md</code>) · 인코딩은 <b>UTF-8</b></li>
+        <li><b>파일 이름이 곧 문서 ID</b> 입니다 — <code>api-등록.md</code> → <code>api-등록</code></li>
+        <li>폴더째 올릴 수 있습니다. 하위 폴더가 달라도 <b>이름이 같으면 하나만</b> 등록됩니다</li>
+      </ul>
+
+      <h4>4. 형식 보기</h4>
+      <pre class="admin_guide_code">---
+title: API 등록
+category: API 관리 &gt; API 등록
+url: /api/spcreg/def/mvApiDefReg.do
+---
+
+## 등록 절차
+
+API 그룹을 먼저 만들고 등록 화면으로 들어갑니다.
+
+### 필수 입력 항목
+
+API 명, Path, Method 세 가지입니다.</pre>
+    </div>
+    <div class="admin_modal_foot">
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_teal" data-modal-close>닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     폴더 등록 — 퍼블 산출물에 없는 모달입니다(app/static/admin.js 의 '폴더 업로드' 블록).
+     문서 한 건마다 청킹·임베딩이 돌아 몇 초씩 걸리므로 몇 건씩 나눠 보내고 진행률을 씁니다.
+     다음 산출물을 받을 때 이 블록과 ⑤ 탭의 버튼을 함께 옮기세요.
+     ============================================================ -->
+<div class="qr_modal_backdrop" id="docUploadModal">
+  <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="docUploadTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="docUploadTitle">폴더 등록</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <p class="admin_card_sub" id="docUploadSummary"></p>
+      <label class="admin_check" style="display:flex;gap:6px;margin:8px 0;">
+        <input type="checkbox" id="docUploadOverwrite">
+        <span>이미 있는 문서도 덮어씁니다</span>
+      </label>
+      <div class="admin_progress" id="docUploadProgress">
+        <span class="admin_progress_txt">대기 중</span>
+        <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+        <span class="admin_progress_pct">0%</span>
+      </div>
+      <div class="admin_table_wrap">
+        <table class="admin_table">
+          <thead><tr><th>경로</th><th>문서 ID</th><th>결과</th><th class="qr_num">청크</th><th>비고</th></tr></thead>
+          <tbody id="docUploadBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="admin_modal_foot">
+      <button type="button" class="qr_pill qr_pill_outline" data-modal-close>닫기</button>
+      <button type="button" class="qr_pill qr_pill_accent" id="docUploadStartBtn">등록 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- 문서 선택 -->
+<div class="qr_modal_backdrop" id="docPickModal">
+  <div class="qr_modal qr_modal_sm" role="dialog" aria-modal="true" aria-labelledby="docPickTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="docPickTitle">출처 문서 선택</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <div class="admin_search" data-search="docpick" style="width:100%;margin-bottom:10px;">
+        <span class="admin_search_ico" aria-hidden="true">🔍</span>
+        <input type="text" class="admin_search_input" id="docPickSearch" placeholder="문서 검색" aria-label="문서 검색">
+        <button type="button" class="admin_search_clear" data-search-clear aria-label="검색어 지우기">✕</button>
+      </div>
+      <div id="docPickList" style="max-height:320px;overflow-y:auto;"></div>
+    </div>
+    <div class="admin_modal_foot">
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>취소</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="docPickApply">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 확인 -->
+<div class="qr_modal_backdrop" id="confirmModal">
+  <div class="qr_modal qr_modal_sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="confirmTitle">확인</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <div class="admin_modal_body">
+      <p class="admin_confirm_msg" data-bind="message">진행하시겠습니까?</p>
+      <p class="admin_confirm_sub" data-bind="sub"></p>
+    </div>
+    <div class="admin_modal_foot">
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>취소</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="confirmOk">확인</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     로그인 모달 (요잭서 03) — 02의 3번 login.html 을 대심합니다.
+     ESC · 배경 클릭 · ✕ 로 닫힌지 않습니다 (닫기 버튼 자신이 없습니다).
+     data-auth-reason="initial | expired" — 안내 문구만 달라집니다.
+     아이디·별번호는 어느 저장소에도(localStorage 포함) 남기지 않습니다.
+     ============================================================ -->
+<div class="qr_modal_backdrop admin_auth_backdrop" id="authModal" data-auth-reason="initial">
+  <div class="qr_modal admin_auth_modal" role="dialog" aria-modal="true"
+       aria-labelledby="authTitle" aria-describedby="authDesc">
+    <form class="admin_auth_form" id="authForm">
+      <div class="admin_auth_head">
+        <span class="qr_logo" data-brand="{organization}">KT</span>
+        <h2 class="admin_auth_title" id="authTitle" data-brand="{service_name} 관리자">관리자 로그인</h2>
+        <p class="admin_auth_desc" id="authDesc">
+          <span class="admin_auth_desc_initial">계정 정보를 입력해 주세요.</span>
+          <span class="admin_auth_desc_expired">잠시 사용이 없어 연결이 만료되었습니다.<br>다시 로그인하시면 하던 작업을 이어서 하실 수 있습니다.</span>
+        </p>
+      </div>
+
+      <div class="admin_auth_body">
+        <div class="admin_field">
+          <label for="authId">아이디</label>
+          <input type="text" class="admin_input" id="authId" name="username"
+                 autocomplete="username" autocapitalize="off" spellcheck="false">
+        </div>
+        <div class="admin_field">
+          <label for="authPw">별번호</label>
+          <span class="admin_auth_pw_wrap">
+            <input type="password" class="admin_input" id="authPw" name="password"
+                   autocomplete="current-password" spellcheck="false">
+            <button type="button" class="admin_auth_pw_toggle" id="authPwToggle"
+                    aria-controls="authPw" aria-pressed="false">보기</button>
+          </span>
+        </div>
+
+        <p class="admin_auth_caps" id="authCaps">
+          <span aria-hidden="true">⇪</span>
+          <span>Caps Lock 이 켜지버진 상태입니다.</span>
+        </p>
+
+        <p class="admin_auth_msg" id="authMsg" role="alert" aria-live="assertive">
+          <span class="admin_ico_warn" aria-hidden="true">!</span>
+          <span class="admin_auth_msg_txt"></span>
+        </p>
+      </div>
+
+      <div class="admin_auth_foot">
+        <button type="submit" class="qr_pill qr_pill_accent admin_auth_submit" id="authSubmit">
+          <span class="qr_spinner" aria-hidden="true"></span>
+          <span class="admin_auth_submit_txt">로그인</span>
+        </button>
+        <p class="admin_auth_note">계정 문의는 API Manager 운영 담당자에게 연락해 주세요.</p>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="admin_toasts" id="adminToasts" aria-live="polite"></div>
+
+<!-- ===================== 템플릿 ===================== -->
+
+<!-- 공용 QA 편집 컴포넌트 — QA 검수 모달과 검수 화면이 같은 마크업을 씁니다.
+     mountEditor() 가 data-ed → 실제 id(qa* / rev*)를 붙입니다. -->
+<template id="tpl_qa_editor">
+  <div class="admin_ed_head">
+    <span class="admin_ed_head_item admin_ed_q">대표 질문
+      <input type="text" class="admin_input" data-ed="question" aria-label="대표 질문">
+    </span>
+  </div>
+
+  <div class="admin_ed_grid">
+    <div>
+      <p class="admin_ed_pane_label">답변 (마크다운)<span class="admin_ed_pane_hint">**굵게** · `코드` · 1. 목록</span></p>
+      <textarea class="admin_textarea admin_ed_answer" data-ed="answer" spellcheck="false" aria-label="답변"></textarea>
+    </div>
+    <div>
+      <p class="admin_ed_pane_label">사용자에게 보이는 모습<span class="admin_ed_pane_hint">챗봇과 같은 렌더</span></p>
+      <div class="admin_ed_preview" data-ed="preview"></div>
+    </div>
+  </div>
+
+  <div class="admin_ed_cols">
+    <div>
+      <div class="admin_modal_section_head">
+        <h4 class="admin_modal_section_title">변형 질문 <span class="admin_rows_count" data-ed="variantCount">(0)</span></h4>
+        <div class="admin_modal_section_right">
+          <span class="admin_card_sub">적중률은 사실상 이 목록이 정합니다</span>
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-ed="variantGen" data-studio-only>자동 생성</button>
+        </div>
+      </div>
+      <div class="admin_ed_variant_add">
+        <input type="text" class="admin_input" data-ed="variantInput" placeholder="입력하고 Enter" aria-label="변형 질문 추가">
+        <button type="button" class="qr_pill qr_pill_outline" data-ed="variantAdd">추가</button>
+      </div>
+      <div class="admin_rows" data-ed="variants" data-reorder-kind="question"></div>
+    </div>
+
+    <div>
+      <div class="admin_ed_side_block">
+        <p class="admin_ed_pane_label">주제</p>
+        <span class="admin_cat_pop_wrap" data-cat-picker="">
+          <button type="button" class="admin_cat_trigger" data-cat-trigger data-ed="category" aria-expanded="false">
+            <span aria-hidden="true">＃</span>
+            <span class="admin_cat_trigger_label">주제 선택</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+        </span>
+      </div>
+
+      <div class="admin_ed_side_block">
+        <p class="admin_ed_pane_label">출처 문서
+          <button type="button" class="qr_pill qr_pill_outline qr_pill_sm admin_ed_pane_hint" data-ed="sourceAdd">+ 문서</button>
+        </p>
+        <div data-ed="sources"></div>
+      </div>
+
+      <div class="admin_ed_side_block">
+        <p class="admin_ed_pane_label">채점</p>
+        <div class="admin_ed_score" data-ed="score">
+          <span class="admin_ed_score_val"></span>
+          <span class="admin_ed_score_why"></span>
+        </div>
+      </div>
+
+      <!-- 사용자 신고 (요청서 10 C) — 0건이면 영역을 통째로 감춥니다.
+           대부분의 QA가 여기 해당합니다. 신고가 있을 때만 검수자의 눈에 들어와야 합니다. -->
+      <div class="admin_ed_side_block admin_ed_feedback" data-ed="feedback" hidden>
+        <p class="admin_ed_pane_label">
+          <button type="button" class="admin_fb_head" data-ed="feedbackToggle" aria-expanded="false">
+            <span class="admin_fb_arrow" aria-hidden="true">▸</span>
+            <span>사용자 신고</span>
+            <span class="admin_fb_count" data-ed="feedbackCount"></span>
+          </button>
+        </p>
+        <div class="admin_fb_body">
+          <p class="admin_fb_reasons" data-ed="feedbackReasons"></p>
+          <div class="admin_fb_items" data-ed="feedbackItems"></div>
+          <button type="button" class="admin_fb_all" data-ed="feedbackAll" data-goto-tab="history" hidden>질문 이력에서 전체 보기</button>
+        </div>
+      </div>
+
+      <div class="admin_ed_side_block">
+        <p class="admin_ed_pane_label">검수 메모</p>
+        <textarea class="admin_textarea admin_ed_note" data-ed="note"
+                  placeholder="보류한 이유를 남기지 않으면 다음 사람이 같은 판단을 반복합니다" aria-label="검수 메모"></textarea>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl_src_item">
+  <div class="admin_src_item">
+    <button type="button" class="admin_src_head" data-src-toggle>
+      <span class="admin_src_arrow" aria-hidden="true">▸</span>
+      <span class="admin_src_name"></span>
+      <span class="admin_tag_x" data-tag-remove role="button" aria-label="제거">✕</span>
+    </button>
+    <p class="admin_src_excerpt"></p>
+  </div>
+</template>
+
+<template id="tpl_job_row">
+  <div class="admin_job_row">
+    <span class="admin_job_ico" aria-hidden="true"></span>
+    <span class="admin_job_row_title"></span>
+    <span class="admin_job_row_at"></span>
+    <span class="admin_job_row_sum"></span>
+    <span class="admin_job_row_elapsed"></span>
+    <span class="admin_job_row_next">
+      <button type="button" class="qr_pill qr_pill_teal qr_pill_sm admin_job_next"></button>
+      <span class="admin_job_row_dash">—</span>
+    </span>
+  </div>
+</template>
+
+<template id="tpl_flow_step">
+  <div class="admin_flow_step">
+    <span class="admin_flow_no"></span>
+    <span class="admin_flow_title"><span class="admin_flow_title_txt"></span><span class="admin_flow_flag" aria-hidden="true"></span></span>
+    <p class="admin_flow_value"></p>
+    <p class="admin_flow_sub"></p>
+    <button type="button" class="qr_pill qr_pill_outline qr_pill_sm admin_flow_go"></button>
+  </div>
+</template>
+
+<template id="tpl_cat_popover">
+  <div class="admin_cat_popover" data-open-dir="down" role="dialog" aria-label="카테고리 선택">
+    <div class="admin_cat_pop_head">
+      <span class="admin_cat_pop_title">카테고리 선택</span>
+      <button type="button" class="admin_cat_pop_close" data-cat-close aria-label="닫기">✕</button>
+    </div>
+    <div class="admin_cat_search_row">
+      <span class="admin_cat_search_ico" aria-hidden="true">🔍</span>
+      <input type="text" class="admin_cat_search" data-cat-search placeholder="카테고리 검색" aria-label="카테고리 검색">
+    </div>
+    <div class="admin_cat_list" data-cat-list role="listbox" aria-label="카테고리 목록"></div>
+    <p class="admin_cat_empty">일치하는 카테고리가 없습니다.</p>
+  </div>
+</template>
+
+<template id="tpl_row_input">
+  <div class="admin_row_item" draggable="true">
+    <span class="admin_drag" aria-hidden="true">⠿</span>
+    <input type="text" class="admin_input">
+    <span class="admin_row_dup_note">중복</span>
+    <button type="button" class="admin_row_x" data-row-remove aria-label="삭제">✕</button>
+  </div>
+</template>
+
+<template id="tpl_tag">
+  <span class="admin_tag">
+    <span class="admin_tag_txt"></span>
+    <button type="button" class="admin_tag_x" data-tag-remove aria-label="제거">✕</button>
+  </span>
+</template>
+
+<template id="tpl_toast">
+  <div class="admin_toast" role="status">
+    <span class="admin_toast_ico" aria-hidden="true"></span>
+    <span class="admin_toast_txt"></span>
+  </div>
+</template>
+
+<script src="/static/vendor/jquery-3.7.1.min.js"></script>
+<script src="/static/admin.js"></script>
+</body>
+</html>

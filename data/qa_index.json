@@ -15,12 +15,15 @@
         "api-등록"
       ],
       "status": "approved",
-      "hit_count": 2,
-      "created_at": "2026-08-14T18:41:40",
-      "updated_at": "2026-08-14T18:41:40",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
       "created_by": "human",
       "model_used": null,
-      "note": ""
+      "note": "",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
     },
     {
       "qa_id": "qa_1dea294747f9",
@@ -37,12 +40,15 @@
         "api-등록-필드설명"
       ],
       "status": "approved",
-      "hit_count": 1,
-      "created_at": "2026-08-14T18:41:43",
-      "updated_at": "2026-08-14T18:41:43",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
       "created_by": "human",
       "model_used": null,
-      "note": ""
+      "note": "",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
     },
     {
       "qa_id": "qa_582079277dd7",
@@ -57,12 +63,147 @@
         "템플릿-관리"
       ],
       "status": "approved",
-      "hit_count": 1,
-      "created_at": "2026-08-14T18:41:44",
-      "updated_at": "2026-08-14T18:41:44",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
       "created_by": "human",
       "model_used": null,
-      "note": ""
+      "note": "",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
+    },
+    {
+      "qa_id": "qa_4dc8752342a6",
+      "question": "테스트케이스에 필요한 구성 요소는 무엇인가요?",
+      "answer": "",
+      "variants": [],
+      "category_id": "",
+      "source_doc_ids": [],
+      "status": "pending",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
+      "created_by": "ai",
+      "model_used": null,
+      "note": "⚠️ 답변 본문을 잃었습니다(2026-08-17). 대표 질문·변형 질문·주제는 벡터 색인에서 되살렸지만 답변만 남은 곳이 없었습니다. 답변을 채워 다시 승인해 주세요 — 탭 ⑥에서 같은 문서로 재생성하거나 여기서 직접 쓰면 됩니다.",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
+    },
+    {
+      "qa_id": "qa_1dc21be61ea0",
+      "question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "answer": "",
+      "variants": [
+        "과거 API 검증 결과는 어느 위치에서 조회할 수 있습니까?",
+        "API 검증 결과는 과거의 경우 어디서 볼 수 있나요?",
+        "과거 API 검증 결과 조회 위치가 궁금합니다.",
+        "API 검증 기록 조회는 어느 곳에서 하나요?",
+        "API 검증 결과 이전 내역 확인 방법은요?",
+        "과거 검증 결과는 어디서 확인 가능합니까?",
+        "API 검증 결과 과거 내역 확인처",
+        "과거 API 검증 로그는 어디서 확인돼요?",
+        "API 검증 과거 결과 확인 경로"
+      ],
+      "category_id": "",
+      "source_doc_ids": [],
+      "status": "pending",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
+      "created_by": "ai",
+      "model_used": null,
+      "note": "⚠️ 답변 본문을 잃었습니다(2026-08-17). 대표 질문·변형 질문·주제는 벡터 색인에서 되살렸지만 답변만 남은 곳이 없었습니다. 답변을 채워 다시 승인해 주세요 — 탭 ⑥에서 같은 문서로 재생성하거나 여기서 직접 쓰면 됩니다.",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
+    },
+    {
+      "qa_id": "qa_4ae6dc359068",
+      "question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "answer": "",
+      "variants": [
+        "API 검증 테스트 실패 시 문제 원인 파악의 시작점은 무엇인가요?",
+        "API 검증 테스트 실패, 원인 분석을 어디서부터 시작해야 할지 궁금해요.",
+        "API 검증 테스트 실패 원인 추적은 어디부터 해야 하나요?",
+        "API 검증 테스트 실패, 근본 원인 파악 시작점은요?",
+        "API 검증 테스트 실패 시 원인 역추적은 어느 부분부터 해야 하나요?",
+        "API 검증 테스트 실패 원인 분석 시작점 질문.",
+        "API 검증 테스트 실패 원인 파악, 출발점 알려주세요.",
+        "API 검증 테스트 실패했을 때 원인 검색할 곳부터 가르쳐 주세요.",
+        "API 검증 테스트 실패 시 원인 진단 시작 지점.",
+        "API 검증 테스트 실패 원인 파악, 체크 포인트는 어디부터?"
+      ],
+      "category_id": "",
+      "source_doc_ids": [],
+      "status": "pending",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
+      "created_by": "ai",
+      "model_used": null,
+      "note": "⚠️ 답변 본문을 잃었습니다(2026-08-17). 대표 질문·변형 질문·주제는 벡터 색인에서 되살렸지만 답변만 남은 곳이 없었습니다. 답변을 채워 다시 승인해 주세요 — 탭 ⑥에서 같은 문서로 재생성하거나 여기서 직접 쓰면 됩니다.",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
+    },
+    {
+      "qa_id": "qa_fc59cc6038c1",
+      "question": "그룹 등록 화면 주소가 뭔가요?",
+      "answer": "그룹 등록 화면의 주소는 `/apidev/api/spcreg/mvSpcReg.do`입니다. 해당 주소를 통해 그룹 등록 화면에 접속하실 수 있습니다.",
+      "variants": [
+        "그룹 등록 페이지 주소 알려주세요.",
+        "그룹 등록 화면 주소가 어떻게 되나요?",
+        "그룹 등록 화면 주소는요?",
+        "그룹 등록 주소 좀 부탁드립니다.",
+        "그룹 등록 화면 경로가 뭐예요?",
+        "그룹 등록 화면 주소요.",
+        "그룹 등록 화면 URL이 어떻게 되나요?",
+        "그룹 등록 화면 주소는 어떤 건가요?",
+        "그룹 등록 화면 주소를 알고 싶어요."
+      ],
+      "category_id": null,
+      "source_doc_ids": [
+        "api-그룹-등록화면"
+      ],
+      "status": "approved",
+      "hit_count": 0,
+      "created_at": "",
+      "updated_at": "",
+      "created_by": "ai",
+      "model_used": null,
+      "note": "",
+      "score": 5,
+      "judge_model": "qwen3:4b",
+      "judge_reason": "발췌에서 '그룹 등록 화면'의 화면 주소가 정확히 `/apidev/api/spcreg/mvSpcReg.do`로 명시되어 있어 질문에 정확히 답함"
+    },
+    {
+      "qa_id": "qa_6f6328e1431d",
+      "question": "가입 절차가 어떻게 되나요?",
+      "answer": "가입만으로는 끝나지 않습니다. **권한 신청과 승인**까지 마쳐야 등록·배포 메뉴가 열립니다.\n\n1. 회원가입을 합니다.\n2. 로그인합니다.\n3. 마이페이지에서 필요한 시스템의 **권한그룹을 신청**합니다.\n4. 관리자 승인을 기다립니다. 자동 승인이 아니라 사람이 직접 처리합니다.\n5. 승인 뒤 **로그아웃했다가 다시 로그인**합니다.\n\n- 5번을 건너뛰면 승인이 나도 화면이 그대로입니다. 권한 정보가 로그인 시점 값으로 세션에 담기기 때문이며, 새로고침으로는 바뀌지 않습니다.\n- 권한 신청은 **시스템 단위**입니다. 여러 시스템이 필요하면 각각 신청합니다.\n- 전체 흐름은 출처 문서의 그림에서 한눈에 볼 수 있습니다.",
+      "variants": [
+        "가입은 어떻게 하나요?",
+        "회원가입하고 나서 뭘 해야 하나요?",
+        "가입했는데 메뉴가 안 보입니다",
+        "API 등록하려면 어떤 절차를 밟아야 하나요?",
+        "권한 신청은 언제 하나요?",
+        "승인은 났다는데 화면이 그대로입니다"
+      ],
+      "category_id": "auth_apply",
+      "source_doc_ids": [
+        "가입-절차-흐름도"
+      ],
+      "status": "approved",
+      "hit_count": 1,
+      "created_at": "",
+      "updated_at": "",
+      "created_by": "human",
+      "model_used": null,
+      "note": "",
+      "score": 0,
+      "judge_model": "",
+      "judge_reason": ""
     }
   ]
 }

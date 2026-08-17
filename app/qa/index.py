@@ -1,4 +1,4 @@
-"""QA 벡터 색인 · 검색.
+﻿"""QA 벡터 색인 · 검색.
 
 `qa_index` 컬렉션에는 **답변이 아니라 질문이 들어간다.** 사용자 질문과 비교할 대상은
 질문이기 때문이다. 답변으로 색인하면 "API 등록 절차가 궁금해요" 같은 질문이
@@ -14,7 +14,7 @@
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_event
-from app.ingestion.embedder import OllamaEmbedder
+from app.ingestion.embedder import OnnxEmbedder
 from app.ingestion.vector_store import qa_collection, rebuild_collection, to_similarity
 from app.qa.store import QaItem, load_qa, serving_items
 
@@ -23,10 +23,25 @@ logger = get_logger("qa.index")
 _QA_ID_KEY = "qa_id"
 
 
+def collapse_by_qa(hits: list[dict]) -> list[dict]:
+    """같은 QA의 변형 질문이 여러 개 걸리므로 `qa_id` 단위로 최고 점수만 남긴다.
+
+    사용자에게 보여줄 때는 접어야 한다 — 관련 QA 세 개가 전부 같은 항목이면 고를 것이 없다.
+    """
+    best: dict[str, dict] = {}
+    for hit in hits:
+        current = best.get(hit["qa_id"])
+        if current is None or hit["similarity"] > current["similarity"]:
+            best[hit["qa_id"]] = hit
+    return sorted(best.values(), key=lambda h: h["similarity"], reverse=True)
+
+
 class QaIndex:
-    def __init__(self):
-        self.collection = qa_collection()
-        self.embedder = OllamaEmbedder()
+    def __init__(self, check_model: bool = True):
+        # `check_model=False` 는 **재색인 경로 전용**이다. 모델이 바뀌면 컬렉션을 여는 것부터
+        # 막히는데, 그 상태를 푸는 유일한 방법이 재색인이라 그 길까지 막으면 손쓸 수가 없다.
+        self.collection = qa_collection(check_model=check_model)
+        self.embedder = OnnxEmbedder()
 
     # ------------------------------------------------------------------ 색인
 
@@ -87,7 +102,14 @@ class QaIndex:
         query_vector = self.embedder.embed(question, task="similarity")
         return query_vector, self.search_by_vector(query_vector, top_k)
 
-    def search_by_vector(self, query_vector: list[float], top_k: int) -> list[dict]:
+    def search_by_vector(self, query_vector: list[float], top_k: int,
+                         collapse: bool = True) -> list[dict]:
+        """`collapse=False` 면 **접지 않고** 걸린 문장을 하나씩 돌려준다.
+
+        평가(`app/studio/evaluate.py`)가 그렇게 부른다. 평가는 "인덱스에 든 그 문장 자신"을
+        빼고 순위를 매기는데, 접어 버리면 그 QA의 대표 한 줄만 남아 **그것을 빼는 순간 QA가
+        통째로 사라진다.** 그래서 적중률이 늘 0%로 나왔다(2026-08-17 발견).
+        """
         total = self.collection.count()
         if total == 0:
             return []
@@ -101,19 +123,15 @@ class QaIndex:
         metadatas = (results.get("metadatas") or [[]])[0]
         distances = (results.get("distances") or [[]])[0]
 
-        # 같은 QA의 변형 질문이 여러 개 잡히므로 qa_id 단위로 최고 점수만 남긴다.
-        best: dict[str, dict] = {}
+        hits = []
         for text, meta, dist in zip(documents, metadatas, distances):
             qa_id = meta.get(_QA_ID_KEY)
             if not qa_id:
                 continue
-            similarity = to_similarity(dist)
-            current = best.get(qa_id)
-            if current is None or similarity > current["similarity"]:
-                best[qa_id] = {
-                    "qa_id": qa_id,
-                    "matched_question": text,
-                    "is_variant": bool(meta.get("is_variant")),
-                    "similarity": similarity,
-                }
-        return sorted(best.values(), key=lambda h: h["similarity"], reverse=True)
+            hits.append({
+                "qa_id": qa_id,
+                "matched_question": text,
+                "is_variant": bool(meta.get("is_variant")),
+                "similarity": to_similarity(dist),
+            })
+        return collapse_by_qa(hits) if collapse else hits

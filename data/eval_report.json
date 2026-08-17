@@ -1,0 +1,424 @@
+{
+  "run_at": "2026-08-17T10:29:40",
+  "model": "bge-m3-onnx",
+  "threshold": 0.9,
+  "total": 38,
+  "top1": 100.0,
+  "top3": 100.0,
+  "mismatch_rate": 0.0,
+  "miss_rate": 34.2,
+  "threshold_sweep": [
+    {
+      "threshold": 0.75,
+      "answer_rate": 100.0,
+      "hit_rate": 100.0,
+      "mismatch_rate": 0.0
+    },
+    {
+      "threshold": 0.8,
+      "answer_rate": 94.7,
+      "hit_rate": 94.7,
+      "mismatch_rate": 0.0
+    },
+    {
+      "threshold": 0.85,
+      "answer_rate": 94.7,
+      "hit_rate": 94.7,
+      "mismatch_rate": 0.0
+    },
+    {
+      "threshold": 0.9,
+      "answer_rate": 65.8,
+      "hit_rate": 65.8,
+      "mismatch_rate": 0.0
+    },
+    {
+      "threshold": 0.95,
+      "answer_rate": 15.8,
+      "hit_rate": 15.8,
+      "mismatch_rate": 0.0
+    }
+  ],
+  "items": [
+    {
+      "question": "API 검증 결과 과거 내역 확인처",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "API 검증 결과 이전 내역 확인 방법은요?",
+      "similarity": 0.8986,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "API 검증 결과 이전 내역 확인 방법은요?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "API 검증 결과 과거 내역 확인처",
+      "similarity": 0.8986,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "API 검증 결과는 과거의 경우 어디서 볼 수 있나요?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "similarity": 0.9534,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 과거 결과 확인 경로",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "API 검증 결과 과거 내역 확인처",
+      "similarity": 0.8973,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "API 검증 기록 조회는 어느 곳에서 하나요?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "과거 API 검증 로그는 어디서 확인돼요?",
+      "similarity": 0.8989,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "API 검증 테스트 실패 시 문제 원인 파악의 시작점은 무엇인가요?",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "similarity": 0.9529,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패 시 원인 역추적은 어느 부분부터 해야 하나요?",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 원인 추적은 어디부터 해야 하나요?",
+      "similarity": 0.9137,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패 시 원인 진단 시작 지점.",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 원인 분석 시작점 질문.",
+      "similarity": 0.8868,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "API 검증 테스트 실패 원인 분석 시작점 질문.",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 원인 파악, 출발점 알려주세요.",
+      "similarity": 0.9382,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패 원인 추적은 어디부터 해야 하나요?",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "similarity": 0.9519,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패 원인 파악, 체크 포인트는 어디부터?",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 시 문제 원인 파악의 시작점은 무엇인가요?",
+      "similarity": 0.9304,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패 원인 파악, 출발점 알려주세요.",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 원인 분석 시작점 질문.",
+      "similarity": 0.9382,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패, 근본 원인 파악 시작점은요?",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트 실패 시 문제 원인 파악의 시작점은 무엇인가요?",
+      "similarity": 0.9394,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패, 원인 분석을 어디서부터 시작해야 할지 궁금해요.",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "similarity": 0.9298,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 검증 테스트 실패했을 때 원인 검색할 곳부터 가르쳐 주세요.",
+      "expected_qa_id": "qa_4ae6dc359068",
+      "expected_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "matched_qa_id": "qa_4ae6dc359068",
+      "matched_question": "API 검증 테스트에서 실패했을 때 원인 파악은 어디서부터 해야 하나요?",
+      "similarity": 0.9221,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 등록 절차 알려주세요",
+      "expected_qa_id": "qa_fe8dbfa73d19",
+      "expected_question": "API 등록은 어떻게 하나요?",
+      "matched_qa_id": "qa_fe8dbfa73d19",
+      "matched_question": "API 등록은 어떻게 하나요?",
+      "similarity": 0.9122,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API 등록하는 방법",
+      "expected_qa_id": "qa_fe8dbfa73d19",
+      "expected_question": "API 등록은 어떻게 하나요?",
+      "matched_qa_id": "qa_fe8dbfa73d19",
+      "matched_question": "API 등록은 어떻게 하나요?",
+      "similarity": 0.9268,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "API를 처음 등록하려면 무엇부터 해야 하나요?",
+      "expected_qa_id": "qa_fe8dbfa73d19",
+      "expected_question": "API 등록은 어떻게 하나요?",
+      "matched_qa_id": "qa_fe8dbfa73d19",
+      "matched_question": "API 등록은 어떻게 하나요?",
+      "similarity": 0.8948,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "과거 API 검증 결과 조회 위치가 궁금합니다.",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "과거 API 검증 결과는 어느 위치에서 조회할 수 있습니까?",
+      "similarity": 0.9197,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "과거 API 검증 결과는 어느 위치에서 조회할 수 있습니까?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "API 검증 결과는 과거의 경우 어디서 볼 수 있나요?",
+      "similarity": 0.9486,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "과거 API 검증 로그는 어디서 확인돼요?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "API 검증 결과는 과거의 경우 어디서 볼 수 있나요?",
+      "similarity": 0.9281,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "과거 검증 결과는 어디서 확인 가능합니까?",
+      "expected_qa_id": "qa_1dc21be61ea0",
+      "expected_question": "과거 API 검증 결과를 언제 어디서 확인할 수 있나요?",
+      "matched_qa_id": "qa_1dc21be61ea0",
+      "matched_question": "과거 API 검증 결과는 어느 위치에서 조회할 수 있습니까?",
+      "similarity": 0.86,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "권한그룹 값을 어디서 확인하나요?",
+      "expected_qa_id": "qa_1dea294747f9",
+      "expected_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "matched_qa_id": "qa_1dea294747f9",
+      "matched_question": "권한그룹 선택 기준이 궁금합니다",
+      "similarity": 0.7844,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "권한그룹 뭐 골라요?",
+      "expected_qa_id": "qa_1dea294747f9",
+      "expected_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "matched_qa_id": "qa_1dea294747f9",
+      "matched_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "similarity": 0.9157,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "권한그룹 선택 기준이 궁금합니다",
+      "expected_qa_id": "qa_1dea294747f9",
+      "expected_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "matched_qa_id": "qa_1dea294747f9",
+      "matched_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "similarity": 0.8534,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "권한그룹은 무엇을 뜻하나요?",
+      "expected_qa_id": "qa_1dea294747f9",
+      "expected_question": "권한그룹은 무엇을 선택해야 하나요?",
+      "matched_qa_id": "qa_1dea294747f9",
+      "matched_question": "권한그룹 뭐 골라요?",
+      "similarity": 0.8676,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "그룹 등록 주소 좀 부탁드립니다.",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 페이지 주소 알려주세요.",
+      "similarity": 0.9158,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 페이지 주소 알려주세요.",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 주소 좀 부탁드립니다.",
+      "similarity": 0.9158,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 URL이 어떻게 되나요?",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소가 어떻게 되나요?",
+      "similarity": 0.941,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 경로가 뭐예요?",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소는요?",
+      "similarity": 0.9388,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 주소가 어떻게 되나요?",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소가 뭔가요?",
+      "similarity": 0.9673,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 주소는 어떤 건가요?",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소가 뭔가요?",
+      "similarity": 0.9782,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 주소는요?",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소가 뭔가요?",
+      "similarity": 0.9738,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 주소를 알고 싶어요.",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소요.",
+      "similarity": 0.9438,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "그룹 등록 화면 주소요.",
+      "expected_qa_id": "qa_fc59cc6038c1",
+      "expected_question": "그룹 등록 화면 주소가 뭔가요?",
+      "matched_qa_id": "qa_fc59cc6038c1",
+      "matched_question": "그룹 등록 화면 주소를 알고 싶어요.",
+      "similarity": 0.9438,
+      "rank": 1,
+      "verdict": "hit"
+    },
+    {
+      "question": "새 API를 만들고 싶습니다",
+      "expected_qa_id": "qa_fe8dbfa73d19",
+      "expected_question": "API 등록은 어떻게 하나요?",
+      "matched_qa_id": "qa_fe8dbfa73d19",
+      "matched_question": "API 등록하는 방법",
+      "similarity": 0.7775,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "템플릿 수정 시 기존 API 영향",
+      "expected_qa_id": "qa_582079277dd7",
+      "expected_question": "템플릿을 수정하면 기존 API에도 반영되나요?",
+      "matched_qa_id": "qa_582079277dd7",
+      "matched_question": "템플릿을 수정하면 기존 API에도 반영되나요?",
+      "similarity": 0.8929,
+      "rank": 1,
+      "verdict": "miss"
+    },
+    {
+      "question": "템플릿을 고치면 이미 등록한 API는 어떻게 되나요?",
+      "expected_qa_id": "qa_582079277dd7",
+      "expected_question": "템플릿을 수정하면 기존 API에도 반영되나요?",
+      "matched_qa_id": "qa_582079277dd7",
+      "matched_question": "템플릿을 수정하면 기존 API에도 반영되나요?",
+      "similarity": 0.8948,
+      "rank": 1,
+      "verdict": "miss"
+    }
+  ]
+}

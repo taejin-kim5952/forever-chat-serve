@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1280">
-<title>API Manager 도우미</title>
+<!-- data-brand="포맷" 이 붙은 요소는 서버가 납품처 프로필로 텍스트를 갈아 끼운다
+     (app/main.py). 파일을 그냥 열어도 화면이 성립하도록 기본 텍스트는 그대로 둔다. -->
+<title data-brand="{service_name}">API Manager 도우미</title>
 <!-- 운영이 폐쇄망이라 CDN(Pretendard) 링크는 걷어냈다. chat.css 의 font-family 가
      NanumGothic → sans-serif 로 이어지므로 글꼴이 없어도 화면은 깨지지 않는다. -->
 <link rel="stylesheet" href="/static/chat.css">
@@ -15,10 +17,14 @@
 
   <header class="chat_header">
     <div class="chat_header_brand">
-      <span class="chat_logo">KT</span>
-      <span class="chat_title">API Manager 도우미</span>
+      <span class="chat_logo" data-brand="{organization}">KT</span>
+      <span class="chat_title" data-brand="{service_name}">API Manager 도우미</span>
     </div>
-    <p class="chat_header_desc">API 등록 · 그룹 · 템플릿</p>
+    <p class="chat_header_desc" data-brand="{service_desc}">API 등록 · 그룹 · 템플릿</p>
+    <button type="button" class="qr_pill qr_pill_outline chat_admin" id="chatAdmin">관리자</button>
+    <button type="button" class="qr_pill qr_pill_outline chat_reset" id="chatReset" disabled>
+      <span class="chat_reset_ico" aria-hidden="true">↻</span> 새 대화
+    </button>
   </header>
 
   <div class="chat_list" id="chatList">
@@ -30,13 +36,30 @@
 
         <h3 class="chat_intro_sub">자주 찾는 주제</h3>
         <div class="chat_cat_quick" id="chatCatQuick"></div>
-        <button type="button" class="chat_cat_more">전체 주제 보기 <span class="chat_caret">▾</span></button>
+        <button type="button" class="chat_cat_more" id="chatCatMore"
+                aria-expanded="false" aria-controls="chatIntroCats">전체 주제 보기 <span class="chat_caret">▾</span></button>
+
+        <!-- 인트로에서는 그 자리에서 펼친다 — 아래 팝오버와 같은 마크업이다.
+             팝오버 하나를 두고 위치를 계산하지 않은 이유는 요청서 09 2번에 있다:
+             이 목록은 스크롤되는 대화 영역 안이라 스크롤·리사이즈마다 좌표가 어긋난다. -->
+        <div class="chat_intro_cats" id="chatIntroCats">
+          <div class="chat_cat_search_row">
+            <span class="chat_cat_search_ico" aria-hidden="true">🔍</span>
+            <input type="text" class="chat_cat_search" id="chatIntroCatSearch" placeholder="주제 검색" autocomplete="off" aria-label="주제 검색">
+          </div>
+          <div class="chat_cat_list" id="chatIntroCatList" role="listbox" aria-label="주제 목록"></div>
+          <p class="chat_cat_empty">일치하는 주제가 없습니다.<br>그냥 질문을 입력해 주세요.</p>
+        </div>
       </section>
 
     </div>
   </div>
 
   <div class="chat_compose" id="chatCompose">
+
+    <button type="button" class="chat_to_bottom" id="chatToBottom" aria-label="맨 아래로">
+      <span aria-hidden="true">↓</span>
+    </button>
 
     <div class="chat_compose_top">
       <div class="chat_cat_trigger_wrap">
@@ -82,6 +105,68 @@
 </div>
 </div>
 
+<!-- 새 대화 확인 모달 — 접수번호가 포함된 대화일 때만 뜬다.
+     번호는 사용자가 담당자에게 불러 줘야 하는 값이라 지우면 다시 볼 수 없다. -->
+<div class="qr_modal_backdrop" id="chatResetModal">
+  <div class="qr_modal chat_reset_modal" role="dialog" aria-modal="true" aria-labelledby="chatResetTitle">
+    <div class="chat_doc_head">
+      <h3 class="chat_doc_title" id="chatResetTitle">새 대화를 시작할까요?</h3>
+      <button type="button" class="chat_doc_close" data-reset-cancel aria-label="닫기">✕</button>
+    </div>
+    <div class="chat_reset_body">
+      접수번호가 포함된 대화입니다. 지우면 번호를 다시 볼 수 없습니다.
+    </div>
+    <div class="chat_reset_foot">
+      <button type="button" class="qr_pill qr_pill_outline" data-reset-cancel>취소</button>
+      <button type="button" class="qr_pill qr_pill_accent" id="chatResetOk">새 대화 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- 관리자 로그인 모달 — 헤더의 [관리자] 로 연다.
+     admin.html 의 #authModal 과 달리 ESC · 배경 클릭 · ✕ 로 닫힌다. 저쪽은 관리자만
+     들어오는 화면이라 로그인 외에 할 일이 없지만, 이 화면은 질문하러 온 사람이 대부분이라
+     실수로 열었을 때 빠져나갈 길이 있어야 한다.
+     아이디·비밀번호는 어디에도 저장하지 않는다(localStorage 포함). -->
+<div class="qr_modal_backdrop" id="chatAdminModal">
+  <div class="qr_modal chat_admin_modal" role="dialog" aria-modal="true" aria-labelledby="chatAdminTitle">
+    <form class="chat_admin_form" id="chatAdminForm">
+      <div class="chat_doc_head">
+        <div>
+          <h3 class="chat_doc_title" id="chatAdminTitle">관리자 로그인</h3>
+          <p class="chat_doc_section">로그인하면 관리자 화면으로 이동합니다.</p>
+        </div>
+        <button type="button" class="chat_doc_close" data-admin-cancel aria-label="닫기">✕</button>
+      </div>
+
+      <div class="chat_admin_body">
+        <div class="chat_admin_field">
+          <label for="chatAdminId">아이디</label>
+          <input type="text" class="chat_admin_input" id="chatAdminId" name="username"
+                 autocomplete="username" autocapitalize="off" spellcheck="false">
+        </div>
+        <div class="chat_admin_field">
+          <label for="chatAdminPw">비밀번호</label>
+          <span class="chat_admin_pw_wrap">
+            <input type="password" class="chat_admin_input" id="chatAdminPw" name="password"
+                   autocomplete="current-password" spellcheck="false">
+            <button type="button" class="chat_admin_pw_toggle" id="chatAdminPwToggle"
+                    aria-controls="chatAdminPw" aria-pressed="false">보기</button>
+          </span>
+        </div>
+        <p class="chat_admin_msg" id="chatAdminMsg" role="alert" aria-live="assertive"></p>
+      </div>
+
+      <div class="chat_admin_foot">
+        <button type="button" class="qr_pill qr_pill_outline" data-admin-cancel>취소</button>
+        <button type="submit" class="qr_pill qr_pill_accent chat_admin_submit" id="chatAdminSubmit">로그인</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<p class="chat_sr_live" id="chatLive" role="status" aria-live="polite"></p>
+
 <!-- 출처 문서 상세 모달 -->
 <div class="qr_modal_backdrop chat_doc_backdrop" id="chatDocModal">
   <div class="qr_modal chat_doc_modal" role="dialog" aria-modal="true" aria-labelledby="chatDocTitle">
@@ -120,7 +205,28 @@
         <span class="chat_verified"><span class="chat_verified_ico" aria-hidden="true">✓</span> 담당자 검수 완료</span>
         <span class="chat_meta_dot" aria-hidden="true">·</span>
         <span class="chat_meta_ai">AI가 작성한 답변입니다</span>
+        <button type="button" class="chat_msg_copy" data-copy aria-label="답변 복사">복사</button>
+        <span class="chat_fb">
+          <button type="button" class="chat_fb_btn chat_fb_up" data-fb="up" aria-pressed="false" aria-label="도움이 됐어요">👍</button>
+          <button type="button" class="chat_fb_btn chat_fb_down" data-fb="down" aria-pressed="false" aria-label="도움이 안 됐어요">👎</button>
+        </span>
       </p>
+
+      <!-- 👎 이유 — 모달이 아니라 말풍선 안에 인라인으로 펼친다. 모달은 무거워서 그냥 닫고 나간다.
+           이유가 필요한 까닭은 조치가 갈리기 때문이다(요청서 10 2번):
+           mismatch → 변형 질문·임계값 / wrong → 답변 수정 / thin → 답변 보강. -->
+      <div class="chat_fb_reasons">
+        <p class="chat_fb_reasons_head">
+          <span>어떤 점이 아쉬웠나요?</span>
+          <button type="button" class="chat_fb_skip">건너뛰기</button>
+        </p>
+        <div class="chat_fb_reason_list">
+          <button type="button" class="chat_fb_reason" data-reason="mismatch">질문과 다른 답이에요</button>
+          <button type="button" class="chat_fb_reason" data-reason="wrong">내용이 틀려요</button>
+          <button type="button" class="chat_fb_reason" data-reason="thin">설명이 부족해요</button>
+        </div>
+      </div>
+      <p class="chat_fb_done">의견 감사합니다</p>
     </div>
   </div>
 </template>

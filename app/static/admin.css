@@ -1104,6 +1104,98 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
 .admin_auth_note{margin:12px 0 0;color:var(--qr-mute);font-size:11.5px;text-align:center;}
 
 /* ============================================================
+   QA 가져오기 (요청서 11) — #qaImportModal
+   ============================================================ */
+.admin_import_stage[hidden]{display:none;}
+.admin_import_lead b{color:var(--qr-ink);font-weight:700;}
+
+/* ? 도움말 */
+.admin_help{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;margin-left:3px;padding:0;
+  border:1px solid var(--ad-line-soft);border-radius:50%;
+  background:#fff;color:var(--qr-mute);
+  font-size:10.5px;font-weight:700;line-height:1;cursor:pointer;vertical-align:1px;
+}
+.admin_help:hover{border-color:var(--qr-teal);color:var(--qr-teal);}
+.admin_helpbox{
+  margin:8px 0 12px;padding:11px 13px;
+  border:1px solid var(--ad-line-soft);border-left:3px solid var(--qr-teal);
+  border-radius:var(--qr-radius);background:var(--qr-teal-bg);
+  color:var(--qr-ink-soft);font-size:12px;line-height:1.6;
+}
+.admin_helpbox[hidden]{display:none;}
+.admin_helpbox b{display:block;margin-bottom:2px;color:var(--qr-ink);font-size:12.5px;}
+
+/* 1단계 — 파일 놓는 자리 */
+.admin_import_drop{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:32px 20px;
+  border:1px dashed var(--qr-line);border-radius:var(--qr-radius);
+  background:var(--ad-soft);text-align:center;
+}
+.admin_import_drop.is_over{border-color:var(--qr-teal);background:var(--qr-teal-bg);}
+.admin_import_drop.is_invalid{border-color:var(--qr-danger);background:#fdeaea;}
+.admin_import_drop b{font-size:13px;}
+.admin_import_hint{color:var(--qr-mute);font-size:11.5px;}
+
+.admin_import_file{
+  display:flex;align-items:center;gap:9px;margin-top:10px;padding:9px 12px;
+  border:1px solid var(--qr-teal);border-radius:var(--qr-radius);
+  background:var(--qr-teal-bg);font-size:12.5px;
+}
+.admin_import_file[hidden]{display:none;}
+.admin_import_file_name{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:700;}
+.admin_import_file_size{flex:1 1 auto;color:var(--qr-mute);font-size:11.5px;}
+.admin_import_file_clear{
+  flex:0 0 auto;width:20px;height:20px;padding:0;
+  border:0;border-radius:50%;background:transparent;
+  color:var(--qr-mute);font-size:11px;line-height:1;cursor:pointer;
+}
+.admin_import_file_clear:hover{background:#fff;color:var(--qr-accent);}
+
+/* 2단계 — 요약 3칸 */
+.admin_import_filename{margin-bottom:12px;}
+.admin_import_filename span{margin-left:8px;color:var(--qr-mute);}
+.admin_import_sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px;}
+.admin_import_sum_cell{
+  display:flex;flex-direction:column;gap:2px;padding:11px 14px;
+  border:1px solid var(--ad-line-soft);border-radius:var(--qr-radius);background:#fff;
+}
+.admin_import_sum_label{color:var(--qr-ink-soft);font-size:11.5px;font-weight:700;}
+.admin_import_sum_num{font-size:20px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.admin_import_sum_cell[data-sum="new"]{border-color:var(--qr-teal);background:var(--qr-teal-bg);}
+.admin_import_sum_cell[data-sum="new"] .admin_import_sum_num,
+.admin_import_sum_cell[data-sum="new"] .admin_import_sum_label{color:var(--qr-teal-ink, #1a6167);}
+.admin_import_sum_cell[data-sum="over"]{border-color:var(--qr-danger);background:#fdeaea;}
+.admin_import_sum_cell[data-sum="over"] .admin_import_sum_num,
+.admin_import_sum_cell[data-sum="over"] .admin_import_sum_label{color:var(--qr-danger);}
+.admin_import_sum_cell[data-sum="skip"] .admin_import_sum_num{color:var(--qr-mute);}
+
+.admin_import_table{max-height:240px;}
+.admin_import_q{max-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.admin_import_cat,
+.admin_import_note_cell{color:var(--qr-ink-soft);font-size:12px;}
+.admin_import_check{margin-top:12px;}
+.admin_import_note{margin:6px 0 0;color:var(--qr-mute);font-size:11.5px;line-height:1.55;}
+.admin_import_note b{color:var(--qr-ink-soft);font-weight:700;}
+
+/* 상태 배지 — 미리보기 · 결과 공용 */
+.admin_qa_st{
+  display:inline-flex;align-items:center;height:19px;padding:0 8px;
+  border:1px solid var(--ad-line-soft);border-radius:var(--qr-radius-pill);
+  background:#fff;color:var(--qr-ink-soft);
+  font-size:11px;font-weight:700;white-space:nowrap;
+}
+.admin_qa_st.is_new,
+.admin_qa_st.is_created{border-color:var(--qr-teal);background:var(--qr-teal-bg);color:var(--qr-teal-ink, #1a6167);}
+.admin_qa_st.is_over,
+.admin_qa_st.is_updated{border-color:var(--qr-danger);background:#fdeaea;color:var(--qr-danger);}
+.admin_qa_st.is_skip,
+.admin_qa_st.is_skipped{border-color:var(--qr-line);background:#f4f5f6;color:var(--qr-mute);}
+.admin_qa_st.is_failed{border-color:var(--qr-danger);background:var(--qr-danger);color:#fff;}
+
+/* ============================================================
    [DEV ONLY] 확인용 상태 목업 바 — 개발 이식 시 이 블록 전체 삭제
    ============================================================ */
 .admin_devbar{

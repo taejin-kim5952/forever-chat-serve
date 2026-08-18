@@ -2328,6 +2328,222 @@ $(function(){
     openModal('docUploadModal');
   });
 
+  /* ---------------------------------------------------------------------------
+     QA 가져오기 (요청서 11) — #qaImportModal
+     스튜디오(사내 작업 PC)에서 만든 QA 파일을 서버로 들여옵니다. 폴더 등록과 같은 이유로
+     한 번에 다 보내지 않고 몇 건씩 나눠 보냅니다 — 수백 건이면 진행을 보여줄 수 없고,
+     타임아웃이 나면 무엇이 들어갔는지 알 수 없습니다.
+     들여온 항목은 서버에서 무조건 검수 대기로 들어옵니다(화면에 승인 선택지가 없습니다).
+     --------------------------------------------------------------------------- */
+  var QA_IMPORT_BATCH = 20;
+  var QA_IMP_PREV_ST = { new:['is_new','새로'], over:['is_over','덮음'], skip:['is_skip','건너뜀'] };
+  var QA_IMP_RES_ST = {
+    created:['is_created','추가'], updated:['is_updated','덮음'],
+    skipped:['is_skipped','건너뜀'], failed:['is_failed','실패']
+  };
+  var qaImpFile = null;      /* 고른 파일 */
+  var qaImpItems = [];       /* 서버가 내려준 미리보기 목록 */
+  var qaImpBusy = false;
+
+  function qaImpStage(stage){
+    $('#qaImportModal').find('.admin_import_stage').prop('hidden', true)
+      .filter('[data-stage="' + stage + '"]').prop('hidden', false);
+    $('#qaImportCheckBtn').prop('hidden', stage !== 'pick');
+    $('#qaImportStartBtn').prop('hidden', stage !== 'preview');
+    $('#qaImportGotoBtn').prop('hidden', stage !== 'done');
+    if(stage === 'done') $('#qaImportModal').find('[data-stage="run"]').prop('hidden', false);
+  }
+
+  function qaImpSetFile(file){
+    qaImpFile = (file && /\.json$/i.test(file.name)) ? file : null;
+    $('#qaImportDrop').toggleClass('is_invalid', !!file && !qaImpFile);
+    $('#qaImportFileInfo').prop('hidden', !qaImpFile);
+    if(qaImpFile){
+      $('#qaImportFileInfo').find('[data-bind=file_name]').text(qaImpFile.name);
+      $('#qaImportFileInfo').find('[data-bind=file_size]').text((qaImpFile.size / 1024).toFixed(1) + ' KB');
+    } else if(file){
+      toast('.json 파일 1개만 올릴 수 있습니다', 'err');
+    }
+    $('#qaImportCheckBtn').prop('disabled', !qaImpFile);
+  }
+
+  /* 덮어쓰기를 끄면 이미 있는 항목(over)은 전부 건너뜀으로 바뀝니다. 끈 상태가 기본입니다. */
+  function qaImpState(it){
+    var st = it.status || it.state;
+    if(st === 'over' && !$('#qaImportOverwrite').prop('checked')) return 'skip';
+    return st;
+  }
+
+  function qaImpRenderPreview(){
+    var $body = $('#qaImportPreviewBody').empty();
+    var sum = { new:0, over:0, skip:0 };
+    $.each(qaImpItems, function(_, it){
+      var st = qaImpState(it);
+      sum[st] = (sum[st] || 0) + 1;
+      var m = QA_IMP_PREV_ST[st] || ['','—'];
+      var $r = tpl('tpl_qa_import_row').children();
+      $r.find('.admin_qa_st').addClass(m[0]).text(m[1]);
+      $r.find('.admin_import_q').text(it.question || '').attr('title', it.question || '');
+      $r.find('.admin_import_cat').text(it.category_label || '(주제 없음)');
+      $r.find('.admin_import_score').text(it.score == null ? '—' : it.score);
+      $body.append($r);
+    });
+    $('.admin_import_sum').find('[data-bind=new_count]').text(num(sum.new));
+    $('.admin_import_sum').find('[data-bind=over_count]').text(num(sum.over));
+    $('.admin_import_sum').find('[data-bind=skip_count]').text(num(sum.skip));
+    $('#qaImportPreviewBody').closest('.admin_table_wrap').toggle(qaImpItems.length > 0);
+    $('#qaImportPreviewEmpty').prop('hidden', qaImpItems.length > 0);
+    $('#qaImportStartBtn').prop('disabled', (sum.new + sum.over) === 0);
+    return sum;
+  }
+
+  function qaImpOpen(){
+    qaImpFile = null; qaImpItems = []; qaImpBusy = false;
+    $('#qaImportFile').val('');
+    $('#qaImportDrop').removeClass('is_over is_invalid');
+    $('#qaImportFileInfo').prop('hidden', true);
+    $('#qaImportCheckBtn').prop('disabled', true).text('내용 확인');
+    $('#qaImportStartBtn').prop('disabled', false).text('가져오기 시작');
+    $('#qaImportOverwrite').prop('checked', false);
+    $('#qaImportHelpBox').prop('hidden', true);
+    $('#qaImportHelp').attr('aria-expanded','false');
+    $('#qaImportPreviewBody').empty();
+    $('#qaImportResultBody').empty();
+    $('#qaImportResultSummary').text('');
+    $('#qaImportProgress').removeClass('is_shown is_err');
+    qaImpStage('pick');
+    openModal('qaImportModal');
+  }
+
+  $('#qaImportBtn').on('click', qaImpOpen);
+
+  $('#qaImportHelp').on('click', function(){
+    var open = $('#qaImportHelpBox').prop('hidden');
+    $('#qaImportHelpBox').prop('hidden', !open);
+    $(this).attr('aria-expanded', open ? 'true' : 'false');
+  });
+
+  $('#qaImportPickBtn').on('click', function(){ $('#qaImportFile').trigger('click'); });
+  $('#qaImportFile').on('change', function(){ qaImpSetFile(this.files && this.files[0]); });
+  $('#qaImportFileClear').on('click', function(){ $('#qaImportFile').val(''); qaImpSetFile(null); });
+
+  $('#qaImportDrop')
+    .on('dragover', function(e){ e.preventDefault(); $(this).addClass('is_over'); })
+    .on('dragleave', function(){ $(this).removeClass('is_over'); })
+    .on('drop', function(e){
+      e.preventDefault();
+      $(this).removeClass('is_over');
+      var dt = e.originalEvent && e.originalEvent.dataTransfer;
+      qaImpSetFile(dt && dt.files && dt.files[0]);
+    });
+
+  /* 미리보기 — 무엇이 어떻게 될지 서버가 계산해서 내려줍니다. 화면이 세지 않습니다. */
+  $('#qaImportCheckBtn').on('click', function(){
+    if(!qaImpFile) return;
+    $('#qaImportCheckBtn').prop('disabled', true).text('확인 중…');
+    var form = new FormData();
+    form.append('file', qaImpFile, qaImpFile.name);
+    API.upload('/api/admin/qa/import/preview', form)
+      .done(function(res){
+        qaImpItems = res.items || [];
+        $('[data-stage=preview]').find('[data-bind=file_name]').text(qaImpFile.name);
+        $('[data-stage=preview]').find('[data-bind=total_count]').text('· ' + num(qaImpItems.length) + '건');
+        qaImpRenderPreview();
+        qaImpStage('preview');
+      })
+      .fail(function(xhr){
+        toast(apiError(xhr, '파일을 읽지 못했습니다'), 'err');
+      })
+      .always(function(){
+        $('#qaImportCheckBtn').prop('disabled', !qaImpFile).text('내용 확인');
+      });
+  });
+
+  $('#qaImportOverwrite').on('change', qaImpRenderPreview);
+
+  $('#qaImportStartBtn').on('click', function(){
+    if(qaImpBusy) return;
+    var sum = qaImpRenderPreview();
+    /* 되돌리기가 없습니다. 덮어쓸 것이 있으면 마지막으로 한 번 더 묻습니다. */
+    if(sum.over > 0){
+      askConfirm(
+        '이미 있는 QA ' + num(sum.over) + '건을 덮어씁니다',
+        '가져오기는 되돌릴 수 없습니다. 적중 횟수와 사용자 신고는 서버 값이 유지되고, 모든 항목은 검수 대기로 들어옵니다.',
+        true, qaImpRun
+      );
+      return;
+    }
+    qaImpRun();
+  });
+
+  function qaImpRun(){
+    var overwrite = $('#qaImportOverwrite').prop('checked');
+    var queue = $.grep(qaImpItems, function(it){
+      var st = it.status || it.state;
+      return st === 'new' || (st === 'over' && overwrite);
+    });
+    var total = queue.length, done = 0;
+    var counts = { created:0, updated:0, skipped:0, failed:0 };
+    if(!total) return;
+
+    qaImpBusy = true;
+    qaImpStage('run');
+    $('#qaImportResultBody').empty();
+    $('#qaImportStartBtn').prop('disabled', true).text('가져오는 중…');
+
+    function addRow(it){
+      var m = QA_IMP_RES_ST[it.status] || ['','—'];
+      var $r = tpl('tpl_qa_import_result').children();
+      $r.find('.admin_import_q').text(it.question || '').attr('title', it.question || '');
+      $r.find('.admin_qa_st').addClass(m[0]).text(m[1]);
+      /* 실패한 줄도 남깁니다 — 왜 실패했는지가 비고에 옵니다. */
+      $r.find('.admin_import_note_cell').text(it.reason || (it.status === 'failed' ? '가져오지 못했습니다' : '검수 대기'));
+      $('#qaImportResultBody').append($r);
+    }
+
+    function step(){
+      if(!queue.length){ finish(); return; }
+      progress($('#qaImportProgress'), { pct:done / total * 100, text:num(total) + '건 중 ' + num(done) + '건' });
+      var batch = queue.splice(0, QA_IMPORT_BATCH);
+      API.send('POST', '/api/admin/qa/import', { items:batch, overwrite:overwrite })
+        .done(function(res){
+          $.each(res.items || [], function(_, it){
+            counts[it.status] = (counts[it.status] || 0) + 1;
+            addRow(it);
+          });
+        })
+        .fail(function(xhr){
+          /* 묶음 하나가 실패해도 멈추지 않습니다 — 남은 항목까지 못 넣으면 처음부터 다시 해야 합니다. */
+          var reason = apiError(xhr, '서버에 보내지 못했습니다');
+          $.each(batch, function(_, it){
+            counts.failed++;
+            addRow({ question:it.question, status:'failed', reason:reason });
+          });
+        })
+        .always(function(){ done += batch.length; step(); });
+    }
+
+    function finish(){
+      qaImpBusy = false;
+      progress($('#qaImportProgress'), { pct:100, text:'완료', error:counts.failed > 0 });
+      $('#qaImportResultSummary').text(
+        '추가 ' + num(counts.created) + ' · 덮음 ' + num(counts.updated) +
+        ' · 건너뜀 ' + num(counts.skipped) + ' · 실패 ' + num(counts.failed) + '건. 모두 검수 대기로 들어왔습니다.'
+      );
+      qaImpStage('done');
+      toast('QA ' + num(counts.created + counts.updated) + '건을 검수 대기로 가져왔습니다', counts.failed ? 'err' : 'ok');
+      loadQa().done(function(){ renderQa(); renderReview(); });
+      refreshFlow();
+    }
+
+    step();
+  }
+
+  $('#qaImportGotoBtn').on('click', function(){
+    closeModal($('#qaImportModal'));
+    selectTab($(this).attr('data-goto-tab') || 'review');
+  });
+
   $('#docUploadStartBtn').on('click', function(){
     if(uploadBusy || !uploadQueue.length) return;
     uploadBusy = true;

@@ -5,7 +5,7 @@
 파일이 성공한 뒤에만 색인을 맞춘다. 색인이 실패해도 원본은 남아 재색인으로 복구된다.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app.core import jobs
 from app.core.auth import require_admin
@@ -19,7 +19,7 @@ from app.models.schemas import (
     ReindexResponse,
 )
 from app.ingestion.doc_index import DocIndex
-from app.qa import store as qa_store
+from app.qa import importer, store as qa_store
 from app.qa.index import QaIndex
 
 logger = get_logger("api.admin_qa")
@@ -150,6 +150,38 @@ def bulk(request: QaBulkRequest) -> QaBulkResponse:
         if item:
             reindexed += 1 if index.upsert_item(item) else 0
     return QaBulkResponse(changed=changed, reindexed=reindexed)
+
+
+@router.post("/import/preview", response_model=importer.PreviewResponse)
+async def import_preview(file: UploadFile = File(...)) -> importer.PreviewResponse:
+    """올린 파일을 읽어 **무엇이 어떻게 될지** 표시해 돌려준다.
+
+    되돌리기가 없어서 이 단계가 필수다. 서버에는 이미 사람이 검수한 결과가 쌓여 있다.
+    파일을 서버가 읽는 이유는, 스튜디오 파일 형식이 늘어나도 화면을 고치지 않게 하려는 것이다.
+    """
+    try:
+        items = importer.parse_file(await file.read())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return importer.preview(items)
+
+
+@router.post("/import", response_model=importer.ImportResponse)
+def import_qa(request: importer.ImportRequest) -> importer.ImportResponse:
+    """실제로 들여온다. **무엇이 적혀 있든 `검수 대기`로 들어온다.**
+
+    화면은 몇 건씩 나눠 부른다 — 수백 건을 한 요청에 담으면 진행 상황을 보여줄 수 없고,
+    타임아웃이 나면 무엇이 들어갔는지 알 수 없다.
+
+    반영한 뒤 벡터 색인은 건드리지 않는다. `pending` 은 어차피 색인에 올라가지 않고,
+    승인할 때 검수 화면이 올린다.
+    """
+    result = importer.apply(request.items, request.overwrite)
+    counts: dict[str, int] = {}
+    for row in result.items:
+        counts[row.status] = counts.get(row.status, 0) + 1
+    log_event(logger, "qa imported", **counts)
+    return result
 
 
 @router.post("/reindex", response_model=ReindexResponse)

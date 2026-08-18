@@ -201,6 +201,29 @@ def test_feedback_markup_and_wiring_are_present():
         assert element in admin_js, f"관리자 피드백 배선이 없습니다: {element}"
 
 
+def test_qa_import_markup_and_wiring_are_present():
+    """QA 가져오기(요청서 11).
+
+    모달만 오고 배선이 빠지면 눌러도 아무 일이 없고, 배선만 있고 마크업이 빠지면 화면이
+    비어 보인다 — 둘 다 조용히 실패하므로 함께 확인한다.
+    """
+    html = (STATIC / "admin.html").read_text(encoding="utf-8")
+    js = ADMIN_JS.read_text(encoding="utf-8")
+
+    for element in ["qaImportBtn", "qaImportModal", "qaImportPreviewBody", "qaImportResultBody",
+                    "tpl_qa_import_row", "tpl_qa_import_result", 'data-sum="new"']:
+        assert element in html, f"QA 가져오기 마크업이 없습니다: {element}"
+
+    assert "/api/admin/qa/import/preview" in js, "미리보기를 서버에 묻지 않습니다"
+    assert "/api/admin/qa/import" in js
+    # 되돌리기가 없다. 덮어쓸 것이 있으면 마지막으로 한 번 더 물어야 한다.
+    handler = js[js.index("$('#qaImportStartBtn').on('click'"):]
+    assert "askConfirm" in handler[:800], "덮어쓰기 전 확인 단계가 없습니다"
+    # 진입 버튼은 검수 화면에 있어야 한다 — 가져오기의 결과가 곧 검수 대기줄이다.
+    review = html[html.index('id="panel_review"'): html.index('id="panel_history"')]
+    assert "qaImportBtn" in review
+
+
 def test_intro_category_accordion_is_present():
     """인트로의 `전체 주제 보기`(요청서 09).
 

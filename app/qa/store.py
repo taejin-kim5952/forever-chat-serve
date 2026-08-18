@@ -14,6 +14,7 @@
 AI가 만든 초안이 검수 없이 사용자에게 새어 나가는 경로를 아예 없애기 위한 구조다.
 """
 
+import re
 import threading
 import time
 import uuid
@@ -34,6 +35,16 @@ QaStatus = Literal["pending", "approved", "hold", "disabled"]
 
 # 사용자에게 나가는 상태. 여기 없는 상태는 벡터 인덱스에 올리지 않는다.
 SERVING_STATUSES: set[str] = {"approved"}
+
+
+def normalize_question(text: str) -> str:
+    """중복 판정용. 공백과 물음표 차이만으로 같은 질문이 두 번 들어가는 것을 막는다.
+
+    스튜디오(생성·평가)와 운영(QA 가져오기)이 **같은 규칙**을 써야 한다. 한쪽만 바뀌면
+    스튜디오에서는 중복으로 걸러진 질문이 가져오기에서는 새 항목으로 들어온다.
+    그래서 studio 가 아니라 저장소에 둔다 — 운영 경로는 `app/studio/` 를 import 하지 않는다.
+    """
+    return re.sub(r"[\s?？!！.]+", "", text).lower()
 
 
 class QaItem(BaseModel):

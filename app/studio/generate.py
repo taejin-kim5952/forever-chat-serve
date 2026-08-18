@@ -55,6 +55,7 @@ from app.core.logging import get_logger, log_event
 from app.core.profile import Profile, load_profile
 from app.ingestion.chunker import chunk_markdown_file
 from app.ingestion.doc_index import DocIndex
+from app.qa import store as qa_store
 from app.studio.judge import judge_answer
 from app.studio.korean import is_expected_language
 from app.studio.llm import StudioLlm
@@ -306,9 +307,9 @@ def clean_answer(text: str) -> str:
     return cleaned.strip()
 
 
-def normalize_question(text: str) -> str:
-    """중복 판정용. 공백과 물음표 차이만으로 같은 질문이 두 번 들어가는 것을 막는다."""
-    return re.sub(r"[\s?？!！.]+", "", text).lower()
+# 중복 판정 규칙은 저장소(app/qa/store.py)에 있다. 운영의 'QA 가져오기'와 **같은 규칙**을
+# 써야 해서 studio 밖으로 옮겼다. 여기서 다시 내보내는 것은 기존 호출부를 그대로 두기 위함이다.
+normalize_question = qa_store.normalize_question
 
 
 def _category_id_for(store: CategoryStore, doc_category: str) -> str | None:

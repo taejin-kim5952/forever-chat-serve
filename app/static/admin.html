@@ -148,6 +148,10 @@
   <div class="admin_panel_head">
     <h2 class="admin_panel_title">검수</h2>
     <p class="admin_panel_desc">승인해야 사용자에게 나갑니다.</p>
+    <div class="admin_panel_head_right">
+      <!-- QA 가져오기 (요청서 11). 검수 화면에 둔 이유는 가져오기의 결과가 곧 검수 대기줄이라서입니다. -->
+      <button type="button" class="qr_pill qr_pill_outline" id="qaImportBtn">QA 가져오기</button>
+    </div>
   </div>
 
   <div class="admin_rev_queue">
@@ -1197,6 +1201,112 @@ API 명, Path, Method 세 가지입니다.</pre>
      문서 한 건마다 청킹·임베딩이 돌아 몇 초씩 걸리므로 몇 건씩 나눠 보내고 진행률을 씁니다.
      다음 산출물을 받을 때 이 블록과 ⑤ 탭의 버튼을 함께 옮기세요.
      ============================================================ -->
+<!-- ============================================================
+     QA 가져오기 (요청서 11) — #docUploadModal 과 같은 구조입니다.
+     파일 선택 → 미리보기 → 진행·결과. 미리보기 숫자는 서버가 계산해서 내려줍니다.
+     · 들여온 QA 는 무조건 '검수 대기' 입니다. '승인 상태로 가져오기' 선택지는 만들지 않습니다 —
+       검수를 거치지 않은 답변이 사용자에게 나가는 경로가 생기면 이 제품의 전제가 무너집니다.
+     · 되돌리기가 없어 미리보기가 마지막 확인 지점입니다. 덮어쓸 건수 > 0 이면 #confirmModal 을 한 번 더 띄웁니다.
+     ============================================================ -->
+<div class="qr_modal_backdrop" id="qaImportModal">
+  <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="qaImportTitle">
+    <div class="admin_modal_head">
+      <h3 class="admin_modal_title" id="qaImportTitle">QA 가져오기</h3>
+      <div class="admin_modal_head_right">
+        <button type="button" class="admin_modal_close" data-modal-close aria-label="닫기">✕</button>
+      </div>
+    </div>
+
+    <div class="admin_modal_body">
+      <p class="admin_card_sub admin_import_lead">
+        사내 작업 PC에서 만든 QA 파일을 올립니다. 올린 항목은 <b>검수 대기</b>로 들어오며, 승인하기 전에는 사용자에게 나가지 않습니다.
+        <button type="button" class="admin_help" id="qaImportHelp" aria-expanded="false" aria-controls="qaImportHelpBox" aria-label="QA 파일이란">?</button>
+      </p>
+      <div class="admin_helpbox" id="qaImportHelpBox" hidden>
+        <b>QA 파일이란</b>
+        답변을 만드는 일은 AI 모델이 필요해서 사내 작업 PC에서 합니다. 이 서버에는 그 모델이 없어서, 만들어 둔 결과를 파일로 받아 옵니다.
+      </div>
+
+      <!-- 1단계 · 파일 선택 -->
+      <div class="admin_import_stage" data-stage="pick">
+        <div class="admin_import_drop" id="qaImportDrop">
+          <input type="file" id="qaImportFile" accept=".json,application/json" hidden>
+          <b>파일을 끌어다 놓거나</b>
+          <button type="button" class="qr_pill qr_pill_outline" id="qaImportPickBtn">파일 선택</button>
+          <span class="admin_import_hint">generated_qa.json · qa_index.json — .json 파일 1개</span>
+        </div>
+        <div class="admin_import_file" id="qaImportFileInfo" hidden>
+          <span class="admin_import_file_name" data-bind="file_name"></span>
+          <span class="admin_import_file_size" data-bind="file_size"></span>
+          <button type="button" class="admin_import_file_clear" id="qaImportFileClear" aria-label="파일 선택 해제">✕</button>
+        </div>
+      </div>
+
+      <!-- 2단계 · 미리보기 -->
+      <div class="admin_import_stage" data-stage="preview" hidden>
+        <p class="admin_card_sub admin_import_filename"><b data-bind="file_name"></b><span data-bind="total_count"></span></p>
+
+        <div class="admin_import_sum">
+          <div class="admin_import_sum_cell" data-sum="new">
+            <span class="admin_import_sum_label">새로 들어옴</span>
+            <b class="admin_import_sum_num" data-bind="new_count">0</b>
+          </div>
+          <div class="admin_import_sum_cell" data-sum="over">
+            <span class="admin_import_sum_label">덮어씀</span>
+            <b class="admin_import_sum_num" data-bind="over_count">0</b>
+          </div>
+          <div class="admin_import_sum_cell" data-sum="skip">
+            <span class="admin_import_sum_label">건너뜀</span>
+            <b class="admin_import_sum_num" data-bind="skip_count">0</b>
+          </div>
+        </div>
+
+        <div class="admin_table_wrap admin_import_table">
+          <table class="admin_table">
+            <thead><tr><th style="width:84px;">상태</th><th>대표 질문</th><th style="width:160px;">주제</th><th class="qr_num" style="width:64px;">점수</th></tr></thead>
+            <tbody id="qaImportPreviewBody"></tbody>
+          </table>
+        </div>
+        <div class="admin_empty" id="qaImportPreviewEmpty" hidden>
+          <p class="admin_empty_title">가져올 항목이 없습니다</p>
+          <p class="admin_empty_desc">파일에 QA 항목이 없거나 모두 건너뜀 대상입니다.</p>
+        </div>
+
+        <label class="admin_check admin_import_check" for="qaImportOverwrite">
+          <input type="checkbox" id="qaImportOverwrite">
+          <span>이미 있는 QA도 덮어씁니다</span>
+        </label>
+        <p class="admin_import_note">덮어써도 <b>적중 횟수와 사용자 신고는 서버 값이 유지</b>됩니다. 가져오기는 되돌릴 수 없습니다.</p>
+      </div>
+
+      <!-- 3단계 · 진행과 결과 -->
+      <div class="admin_import_stage" data-stage="run" hidden>
+        <div class="admin_progress" id="qaImportProgress">
+          <span class="admin_progress_txt">대기 중</span>
+          <span class="admin_progress_track"><span class="admin_progress_bar"></span></span>
+          <span class="admin_progress_pct">0%</span>
+        </div>
+        <p class="admin_card_sub" id="qaImportResultSummary"></p>
+        <div class="admin_table_wrap admin_import_table">
+          <table class="admin_table">
+            <thead><tr><th>대표 질문</th><th style="width:84px;">결과</th><th style="width:200px;">비고</th></tr></thead>
+            <tbody id="qaImportResultBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin_modal_foot">
+      <div class="admin_modal_foot_right">
+        <button type="button" class="qr_pill qr_pill_outline" data-modal-close>닫기</button>
+        <button type="button" class="qr_pill qr_pill_accent" id="qaImportCheckBtn" disabled>내용 확인</button>
+        <button type="button" class="qr_pill qr_pill_accent" id="qaImportStartBtn" hidden>가져오기 시작</button>
+        <button type="button" class="qr_pill qr_pill_teal" id="qaImportGotoBtn" data-goto-tab="review" hidden>검수 화면으로</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="qr_modal_backdrop" id="docUploadModal">
   <div class="qr_modal qr_modal_wide" role="dialog" aria-modal="true" aria-labelledby="docUploadTitle">
     <div class="admin_modal_head">
@@ -1492,6 +1602,23 @@ API 명, Path, Method 세 가지입니다.</pre>
     <span class="admin_tag_txt"></span>
     <button type="button" class="admin_tag_x" data-tag-remove aria-label="제거">✕</button>
   </span>
+</template>
+
+<template id="tpl_qa_import_row">
+  <tr>
+    <td><span class="admin_qa_st"></span></td>
+    <td class="admin_import_q"></td>
+    <td class="admin_import_cat"></td>
+    <td class="qr_num admin_import_score"></td>
+  </tr>
+</template>
+
+<template id="tpl_qa_import_result">
+  <tr>
+    <td class="admin_import_q"></td>
+    <td><span class="admin_qa_st"></span></td>
+    <td class="admin_import_note_cell"></td>
+  </tr>
 </template>
 
 <template id="tpl_toast">

@@ -717,6 +717,25 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
   padding:1px 5px;border:1px solid var(--qr-line);border-radius:4px;background:var(--ad-soft);
   font-family:'D2Coding',Consolas,monospace;font-size:12px;color:var(--qr-accent-dark);
 }
+
+/* 검수 미리보기는 사용자 답변과 **같은 렌더러(markdown.js)** 를 쓴다. 표·코드블록·링크·제목이
+   나올 수 있으므로 여기서도 같은 모양으로 보여야 한다 - 미리보기와 실제가 다르면
+   검수가 의미를 잃는다. */
+.admin_bubble .admin_md .chat_h{margin:14px 0 6px;font-size:13px;font-weight:700;color:#1a1a1a;}
+.admin_bubble .admin_md .chat_tbl_wrap{margin:0 0 9px;overflow-x:auto;}
+.admin_bubble .admin_md .chat_tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.admin_bubble .admin_md .chat_tbl th,
+.admin_bubble .admin_md .chat_tbl td{
+  padding:6px 9px;border:1px solid var(--ad-line-soft);text-align:left;vertical-align:top;
+}
+.admin_bubble .admin_md .chat_tbl th{background:var(--ad-soft);font-weight:700;white-space:nowrap;}
+.admin_bubble .admin_md .chat_code{
+  margin:0 0 9px;padding:9px 11px;overflow-x:auto;
+  border:1px solid var(--qr-line);border-radius:6px;background:var(--ad-soft);
+  font-family:'D2Coding',Consolas,monospace;font-size:12px;line-height:1.6;white-space:pre;
+}
+.admin_bubble .admin_md .chat_code code{padding:0;border:0;background:none;color:inherit;}
+.admin_bubble .admin_md .chat_link{color:var(--qr-accent-dark);text-decoration:underline;text-underline-offset:2px;}
 .admin_bubble_src{margin-top:12px;padding:9px 11px;border:1px solid var(--ad-line-soft);border-radius:8px;}
 .admin_bubble_src_label{margin:0 0 7px;color:var(--qr-mute);font-size:10.5px;font-weight:700;}
 .admin_bubble_src_items{display:flex;flex-wrap:wrap;gap:5px;}

@@ -21,6 +21,7 @@
 5. 서버를 띄우고, 응답하기 시작하면 브라우저를 연다
 """
 
+import os
 import socket
 import subprocess
 import sys
@@ -83,10 +84,15 @@ def ensure_venv() -> bool:
         return False
 
     say("[준비] 패키지를 설치합니다.")
+    # requirements.txt 는 UTF-8(BOM 포함)이다. BOM 이 없으면 pip 이 requirements 를
+    # locale.getpreferredencoding()(한국어 윈도우에선 cp949)로 읽어 한글 주석에서
+    # UnicodeDecodeError 로 죽는다. BOM 으로 이미 막았지만, 누가 BOM 을 지우고
+    # 저장해도 깨지지 않도록 PYTHONUTF8 로 한 번 더 막아 둔다.
+    pip_env = {**os.environ, "PYTHONUTF8": "1"}
     installed = subprocess.run([
         str(VENV_PYTHON), "-m", "pip", "install",
         "--disable-pip-version-check", "-q", "-r", str(ROOT / "requirements.txt"),
-    ])
+    ], env=pip_env)
     if installed.returncode:
         say("[오류] 패키지 설치에 실패했습니다.")
         return False

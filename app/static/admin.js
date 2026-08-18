@@ -253,6 +253,7 @@ function loadFlow(){
 function loadRuntimeModels(){
   return API.get('/api/admin/mode').done(function(m){
     $('#evalEmbedModel').text(m.embed_model || '—');
+    $('#reindexEmbedModel').text(m.embed_model || '—');
     $('#setQuestionModel').text(m.question_model || '—');
     $('#setAnswerModel').text(m.answer_model || '—');
     /* 채점 모델이 비어 있는 것은 설정 누락이 아니라 '채점 안 함'입니다. */
@@ -323,33 +324,17 @@ $(function(){
   var currentCat = null, currentQa = null, currentDoc = null, confirmCb = null;
 
   /* ---------- 유틸 ---------- */
-  function esc(s){
-    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  /* 렌더러는 markdown.js 로 합쳤다 - 검수 미리보기와 사용자 챗봇 답변이 **글자 하나까지
+     같아야** 하기 때문이다(다르면 검수가 의미를 잃는다). 여기서는 별칭만 둔다. */
+  var esc = ChatMD.esc;
   function tpl(id){ return $($('#'+id).prop('content').cloneNode(true)); }
   function findCat(id){ for(var i=0;i<ALL_CATS.length;i++) if(ALL_CATS[i].category_id === id) return ALL_CATS[i]; return null; }
   function findGroup(id){ for(var i=0;i<CATEGORY_GROUPS.length;i++) if(CATEGORY_GROUPS[i].group_id === id) return CATEGORY_GROUPS[i]; return null; }
   function num(n){ return Number(n || 0).toLocaleString('ko-KR'); }
 
-  function inline(t){
-    return esc(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-  }
-  function renderMarkdown(src){
-    var html = '';
-    $.each(String(src || '').replace(/\r\n/g,'\n').split(/\n{2,}/), function(_, block){
-      var lines = block.split('\n').filter(function(l){ return l.trim() !== ''; });
-      if(!lines.length) return;
-      if(/^\s*\d+\.\s/.test(lines[0])){
-        html += '<ol>' + lines.map(function(l){ return '<li>' + inline(l.replace(/^\s*\d+\.\s/,'')) + '</li>'; }).join('') + '</ol>';
-      } else if(/^\s*[-*]\s/.test(lines[0])){
-        html += '<ul>' + lines.map(function(l){ return '<li>' + inline(l.replace(/^\s*[-*]\s/,'')) + '</li>'; }).join('') + '</ul>';
-      } else {
-        html += '<p>' + lines.map(inline).join('<br>') + '</p>';
-      }
-    });
-    return html;
-  }
+  var inline = ChatMD.inline;
+  /* 답변 미리보기 - 사용자 챗봇 말풍선과 동일한 렌더러(이미지 없음) */
+  function renderMarkdown(src){ return ChatMD.renderAnswer(src); }
   function plain(md){ return String(md || '').replace(/[*`#>\-]/g,'').replace(/\s+/g,' ').trim(); }
 
   function rtBadge(rt){
@@ -643,6 +628,47 @@ $(function(){
     closeModal($('#confirmModal'));
     if(confirmCb){ confirmCb(); confirmCb = null; }
   });
+
+  /* ---------- 재색인 ----------
+     임베딩 모델을 바꾸면 컬렉션을 여는 것부터 막혀 챗봇이 500 으로 죽는다. 그걸 푸는 유일한
+     수단이 이 재색인인데 화면에 없어서 그동안 curl 로 풀어야 했다.
+     되돌릴 수 없는 작업이라 확인을 한 번 받는다. 원본(qa_index.json/raw_docs)은 그대로 두므로
+     내용이 사라지지는 않지만, 벡터를 전부 다시 만들어 문서 수에 따라 몇 분 걸린다. */
+  $('#reindexBtn').on('click', function(){
+    var withDocs = $('#reindexWithDocs').is(':checked');
+    askConfirm(
+      withDocs ? 'QA와 문서를 모두 재색인할까요?' : 'QA만 재색인할까요?',
+      '기존 벡터를 지우고 원본에서 다시 만듭니다. 문서 수에 따라 몇 분 걸릴 수 있습니다.',
+      false,
+      function(){ runReindex(withDocs); }
+    );
+  });
+
+  function runReindex(withDocs){
+    var $btn = $('#reindexBtn').prop('disabled', true).text('재색인 중…');
+    $('#reindexWarn').prop('hidden', true);
+    $('#reindexResult').prop('hidden', true);
+
+    API.send('POST', '/api/admin/qa/reindex?include_docs=' + (withDocs ? 'true' : 'false'))
+      .done(function(r){
+        var msg = 'QA ' + (r.items != null ? r.items : '?') + '건 / 벡터 '
+                + (r.vectors != null ? r.vectors : '?') + '개를 다시 색인했습니다.';
+        if(withDocs && r.docs){
+          var files = Object.keys(r.docs).length;
+          var chunks = 0;
+          $.each(r.docs, function(_, n){ chunks += (n || 0); });
+          msg += ' 문서 ' + files + '개 / 조각 ' + chunks + '개도 함께 처리했습니다.';
+        }
+        $('#reindexResult').text(msg).prop('hidden', false);
+        toast('재색인을 마쳤습니다.');
+        loadRuntimeModels();
+      })
+      .fail(function(xhr){
+        $('#reindexWarn').text(apiError(xhr, '재색인에 실패했습니다.')).prop('hidden', false);
+        toast('재색인에 실패했습니다.', 'err');
+      })
+      .always(function(){ $btn.prop('disabled', false).text('재색인'); });
+  }
 
   /* ============================================================
      카테고리 팝오버 (공용 컴포넌트)

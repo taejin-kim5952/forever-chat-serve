@@ -473,25 +473,44 @@ a:hover{color:var(--qr-accent);}
   padding:1px 5px;border-radius:4px;
   background:var(--chat-soft);color:var(--qr-ink);font-size:12px;
 }
-.chat_doc_h{margin:20px 0 8px;color:var(--qr-ink);font-size:13.5px;font-weight:700;}
+/* 아래 클래스는 markdown.js(ChatMD) 가 만들어내는 것이다. 답변 말풍선과 문서 모달이
+   같은 렌더러를 쓰게 되면서 클래스 이름도 한 벌로 합쳤다(chat_doc_* -> chat_*).
+   답변 말풍선(.chat_md)에서도 같은 모양이 나오도록 선택자를 묶어 둔다. */
+.chat_doc_h,
+.chat_md .chat_h{margin:20px 0 8px;color:var(--qr-ink);font-size:13.5px;font-weight:700;}
+.chat_doc_body .chat_h{margin:20px 0 8px;color:var(--qr-ink);font-size:13.5px;font-weight:700;}
 
-/* 그림은 도식이라 가로로 꽉 채운다. 폐쇄망이므로 자원은 전부 우리 서버에서 온다. */
-.chat_doc_figure{margin:6px 0 16px;}
-.chat_doc_img{
+/* 그림은 도식이라 가로로 꽉 채운다. 폐쇄망이므로 자원은 전부 우리 서버에서 온다.
+   답변 말풍선에는 그림이 나오지 않는다(renderAnswer 가 이미지를 그리지 않는다). */
+.chat_fig{margin:6px 0 16px;}
+.chat_fig img{
   display:block;width:100%;height:auto;
   border:1px solid var(--chat-line-soft);border-radius:8px;background:#fff;
 }
 
-/* 표는 모달보다 넓을 수 있다. **표만** 가로로 스크롤한다 — 모달 전체가 흔들리면
-   읽던 자리를 잃는다. */
-.chat_doc_tablewrap{margin:0 0 14px;overflow-x:auto;}
-.chat_doc_table{width:100%;border-collapse:collapse;font-size:12.5px;}
-.chat_doc_table th,
-.chat_doc_table td{
+/* 표는 담는 곳보다 넓을 수 있다. **표만** 가로로 스크롤한다 — 모달이나 말풍선 전체가
+   흔들리면 읽던 자리를 잃는다. */
+.chat_tbl_wrap{margin:0 0 14px;overflow-x:auto;}
+.chat_tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.chat_tbl th,
+.chat_tbl td{
   padding:7px 10px;border:1px solid var(--chat-line-soft);
   text-align:left;vertical-align:top;
 }
-.chat_doc_table th{background:var(--chat-soft);color:var(--qr-ink);font-weight:700;white-space:nowrap;}
+.chat_tbl th{background:var(--chat-soft);color:var(--qr-ink);font-weight:700;white-space:nowrap;}
+
+/* 코드블록 - YAML/JSON 예시. 줄바꿈을 지켜야 해서 가로 스크롤로 둔다. */
+.chat_code{
+  margin:0 0 12px;padding:10px 12px;overflow-x:auto;
+  border:1px solid var(--chat-line-soft);border-radius:8px;
+  background:var(--chat-soft);
+  font-size:12px;line-height:1.6;white-space:pre;
+}
+.chat_code code{padding:0;background:none;font-size:inherit;}
+
+/* 링크 - 내부 경로만 링크로 그려진다(markdown.js safeHref). */
+.chat_link{color:var(--qr-teal-dark);text-decoration:underline;text-underline-offset:2px;}
+.chat_link:hover{color:var(--qr-teal);}
 
 /* ============================================================
    2026-08-15 퍼블 보완 산출물(요청서 04)에서 옮긴 블록

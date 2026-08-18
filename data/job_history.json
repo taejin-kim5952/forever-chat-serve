@@ -1,6 +1,20 @@
 {
   "records": [
     {
+      "key": "index",
+      "status": "done",
+      "started_at": "2026-08-18T18:25:46",
+      "finished_at": "2026-08-18T18:32:55",
+      "summary": "QA 5건 · 문서 40건 · 329청크",
+      "error": "",
+      "batches": 1,
+      "counts": {
+        "docs": 40,
+        "chunks": 329,
+        "qa": 5
+      }
+    },
+    {
       "key": "evaluate",
       "status": "done",
       "started_at": "2026-08-17T10:29:37",

@@ -975,9 +975,9 @@
     });
     $('navAsk').addEventListener('click', function (e) {
       e.preventDefault();
+      /* 패널 열기와 추천 질문은 `setView` 가 합니다 — 들어가는 길이 둘인데 한쪽에만
+         두면 다른 쪽이 빕니다(처음 로드가 그랬습니다). */
       setView('search');
-      if (!ansBody.children.length) renderSuggest();
-      panelOpen(true);
       $('aiQ').focus();
     });
     $('navDrive').addEventListener('click', function (e) {
@@ -1082,6 +1082,14 @@
     if (search) {
       $('pageTitle').textContent = VIEW_TITLE.search;
       $('crumb').textContent = '전체 자료에서 찾습니다';
+      /* 패널을 **여기서** 엽니다. 전에는 `AI 지식 검색` 메뉴를 누를 때만 열어서, 처음
+         들어오면 검색창 아래가 비어 있었습니다 — 다른 메뉴에 갔다 와야 보였습니다
+         (2026-10-07). 들어가는 길이 둘(처음 로드·메뉴 클릭)인데 한쪽만 열고 있었습니다.
+
+         이미 그려진 것이 있으면 그대로 둡니다 — 답을 받아 둔 사람이 메뉴를 다녀왔다고
+         그 답이 추천 질문으로 지워지면 안 됩니다. */
+      if (!ansBody.children.length) renderSuggest();
+      panelOpen(true);
       /* 안내 문구도 되돌립니다. 이 화면은 `searchProject()` 가 '' 라 **전체**가 범위인데,
          프로젝트에 들어갔다 나온 뒤 이름이 남아 있으면 실제 범위와 어긋납니다. */
       $('aiQ').placeholder = DEFAULT_ASK;

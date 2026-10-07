@@ -49,7 +49,10 @@
     /* 'search' = AI 지식 검색(전체 범위, 목록 없음) · 'browse' = 프로젝트 둘러보기 */
     view: 'search',
     aiOn: AI_DEFAULT, model: null, reasoning: false,
-    streaming: false, current: null, stick: true
+    streaming: false, current: null, stick: true,
+    /* 답변 패널에 **답이 들어 있는가.** 추천 질문도 같은 자리에 그려지므로 요소 수로는
+       가를 수 없습니다. 프로젝트 화면에서 패널을 띄울지가 이 값으로 정해집니다. */
+    answered: false
   };
 
   /* ================= 도우미 ================= */
@@ -307,7 +310,8 @@
     showScope();
     renderNavProjects();
     renderFolders(); renderChips(); renderFiles();
-    renderSuggest(); faqOpen(false);   /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
+    faqOpen(false);     /* 열려 있던 '자주 하는 질문' 목록은 닫습니다 */
+    if (!state.answered) clearPanel();
   }
 
   var prev = $('prev'), next = $('next');
@@ -497,7 +501,15 @@
   var aiForm = $('aiForm'), ansBody = $('ansBody');
 
   /* 결과 영역은 검색창 **아래의 따로 있는 블록**입니다. 검색창은 늘 같은 자리에 있습니다. */
+  /* 패널에 **답이 들어 있는지**를 따로 기억합니다. 추천 질문도 패널에 그려지므로
+     `children.length` 로는 '답이 있다' 와 '권유 문구만 있다' 를 가를 수 없습니다. */
   function panelOpen(on) { show($('aiAnswer'), on); }
+  function clearPanel() {
+    state.answered = false;
+    ansBody.innerHTML = '';
+    $('ansQ').textContent = '';
+    panelOpen(false);
+  }
   function scrollDown() { if (state.stick) ansBody.scrollTop = ansBody.scrollHeight; }
   ansBody.addEventListener('scroll', function () {
     state.stick = ansBody.scrollHeight - ansBody.scrollTop - ansBody.clientHeight < 48;
@@ -730,6 +742,7 @@
     /* **한 건씩** 봅니다. 새로 물으면 앞의 답을 대체합니다 — 쌓아 두면 대화처럼 보이는데,
        이어 묻기는 받지 않으므로 할 수 있는 것보다 많아 보이게 됩니다. */
     ansBody.innerHTML = '';
+    state.answered = true;
     panelOpen(true);
     $('ansQ').textContent = '“' + text + '”';
 
@@ -972,7 +985,7 @@
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); if (!state.streaming) send(); }
     });
     $('ansClose').addEventListener('click', function () {
-      stop(); panelOpen(false); ansBody.innerHTML = ''; $('ansQ').textContent = '';
+      stop(); clearPanel();
     });
     $('navAsk').addEventListener('click', function (e) {
       e.preventDefault();
@@ -1080,6 +1093,10 @@
     $('navLibrary').classList.toggle('active', view === 'library');
     openNavProjects(view === 'browse');
     faqOpen(false);     /* 범위가 바뀌면 열려 있던 목록은 닫습니다 */
+    /* 검색 화면이 아니면 **답이 있을 때만** 패널을 둡니다. 추천 질문만 들어 있는 패널이
+       자료 목록 위를 덮고 있으면, 묻지도 않았는데 답하다 만 화면으로 보입니다
+       (2026-10-07). 답을 받아 둔 사람의 답은 지키고 넘어갑니다. */
+    if (!search && !state.answered) clearPanel();
     if (search) {
       $('pageTitle').textContent = VIEW_TITLE.search;
       $('crumb').textContent = '전체 자료에서 찾습니다';

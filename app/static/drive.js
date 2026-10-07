@@ -335,11 +335,54 @@
 
   /* 내려받을 원본이 붙어 있는가. `files` 가 비면 본문뿐이다. */
   function hasOriginal(d) { return !!(d.files && d.files.length); }
+  /* 프로젝트가 가진 **파일**. 카드·메뉴의 건수가 목록과 같아야 합니다. */
   function originalsOf(projectId) {
-    return state.docs.filter(function (d) { return d.project === projectId && hasOriginal(d); });
+    var seen = {}, out = [];
+    state.docs.forEach(function (d) {
+      if (d.project !== projectId) return;
+      (d.files || []).forEach(function (f) {
+        if (seen[f.name]) return;
+        seen[f.name] = true;
+        out.push(f);
+      });
+    });
+    return out;
   }
   function originalBytes(projectId) {
-    return originalsOf(projectId).reduce(function (a, d) { return a + (d.bytes || 0); }, 0);
+    return originalsOf(projectId).reduce(function (a, f) { return a + (f.bytes || 0); }, 0);
+  }
+
+  /* 보이는 **파일** 목록. 문서가 아니라 파일이 한 줄입니다.
+
+     본문 하나가 원본 여럿을 가리킬 수 있고(앞머리 `source_files`), 원본 하나를 본문
+     여럿이 가리킬 수도 있습니다(긴 발표자료를 주제별로 쪼갠 경우). 뒤엣것 때문에 문서로
+     줄을 만들면 같은 파일이 여러 번 뜹니다 — 이름으로 한 번만 추립니다.
+
+     어느 문서로 받을지는 **먼저 만난 것**을 씁니다. 서버가 그 문서에 묶인 원본만 내주므로
+     (`find_named`), 가리키는 문서 중 아무것이나 되고 결과는 같은 파일입니다. */
+  function visibleFiles() {
+    var seen = {}, out = [];
+    visibleDocs().forEach(function (d) {
+      (d.files || []).forEach(function (f) {
+        var key = d.project + '/' + f.name;
+        if (seen[key]) {
+          seen[key].docs.push(d.title);
+          /* 가리키는 본문이 하나라도 색인돼 있으면 그 파일은 검색에 닿습니다. */
+          if (d.indexed) seen[key].indexed = true;
+          return;
+        }
+        seen[key] = {
+          name: f.name, kind: f.kind || 'etc', bytes: f.bytes || 0,
+          project: d.project, project_name: d.project_name,
+          doc_id: d.doc_id, updated: d.updated, docs: [d.title],
+          /* 본문 없이 원본만 올라온 경우입니다. **눈에 보이게** 둡니다 — 숨기면
+             "올렸는데 AI가 모른다"의 원인을 사람이 짚을 수 없습니다. */
+          indexed: d.indexed,
+        };
+        out.push(seen[key]);
+      });
+    });
+    return out;
   }
 
   function visibleDocs() {
@@ -357,31 +400,33 @@
   }
 
   function renderFiles() {
-    var rows = visibleDocs();
+    var rows = visibleFiles();
     rows.sort(function (a, b) {
-      if (state.sort === 'name') return a.title.localeCompare(b.title, 'ko');
+      if (state.sort === 'name') return a.name.localeCompare(b.name, 'ko');
       if (state.sort === 'size') return b.bytes - a.bytes;
-      return String(b.updated).localeCompare(String(a.updated)) || a.title.localeCompare(b.title, 'ko');
+      return String(b.updated).localeCompare(String(a.updated)) || a.name.localeCompare(b.name, 'ko');
     });
     var total = rows.length;
     rows = rows.slice(0, state.limit);
 
-    listEl.innerHTML = rows.map(function (d) {
-      var tags = '';
-      /* 색인 안 된 자료를 **눈에 보이게** 둡니다. 숨기면 "올렸는데 AI가 모른다"의 원인을
-         사람이 짚을 수 없습니다. */
-      if (!d.indexed) tags += '<span class="tag t-raw">색인 안 됨</span>';
-      if (isRecent(d.updated)) tags += '<span class="tag t-new">최근 7일</span>';
-      if (d.qa_count) tags += '<span class="tag t-qa">QA ' + d.qa_count + '건</span>';
-      return '<article class="item' + (d.indexed ? '' : ' is_raw') + '" data-doc="' + esc(d.doc_id) + '">' +
-        '<div class="thumb">' + fileIcon(d.kind) + '</div>' +
-        '<div class="info"><div class="name-row"><span class="name">' + esc(d.title) + '</span>' + tags + '</div>' +
-        '<div class="meta"><span>' + esc(d.project_name) + '</span><i></i><span>' +
-        (d.indexed ? d.chunk_count + '개 절' : '본문 없음') + '</span></div></div>' +
-        '<div class="side"><div class="size">' + fmtSize(d.bytes) + '</div>' +
-        '<div class="when">' + fmtDate(d.updated) + '</div></div>' +
-        '<a class="dl" href="' + esc(fileUrl(d)) + '" download title="내려받기" aria-label="' +
-        esc(d.title) + ' 내려받기"><svg class="i"><use href="#ic-download"/></svg></a></article>';
+    listEl.innerHTML = rows.map(function (f) {
+      var tags = f.indexed ? '' : '<span class="tag t-raw">색인 안 됨</span>';
+      if (isRecent(f.updated)) tags += '<span class="tag t-new">최근 7일</span>';
+      /* 어느 본문이 이 파일을 가리키는지 적습니다. 여럿이면 몇 건인지만 — 제목을 다 늘어
+         놓으면 파일 이름이 묻힙니다. */
+      var from = f.indexed
+        ? (f.docs.length > 1 ? f.docs.length + '개 문서' : f.docs[0])
+        : '본문 없음';
+      return '<article class="item' + (f.indexed ? '' : ' is_raw') + '" data-file="' +
+        esc(f.name) + '">' +
+        '<div class="thumb">' + fileIcon(f.kind) + '</div>' +
+        '<div class="info"><div class="name-row"><span class="name">' + esc(f.name) + '</span>' + tags + '</div>' +
+        '<div class="meta"><span>' + esc(f.project_name) + '</span><i></i><span>' + esc(from) + '</span></div></div>' +
+        '<div class="side"><div class="size">' + fmtSize(f.bytes) + '</div>' +
+        '<div class="when">' + fmtDate(f.updated) + '</div></div>' +
+        '<a class="dl" href="' + esc(fileUrl({ doc_id: f.doc_id, project: f.project, name: f.name })) +
+        '" download title="내려받기" aria-label="' + esc(f.name) +
+        ' 내려받기"><svg class="i"><use href="#ic-download"/></svg></a></article>';
     }).join('');
 
     var left = total - rows.length;
@@ -419,8 +464,12 @@
 
   listEl.addEventListener('click', function (e) {
     if (e.target.closest('.dl')) return;          /* 내려받기는 <a> 가 그대로 처리합니다 */
+    /* 이 목록은 **받는 곳**이라 줄을 눌러도 받습니다. 전에는 본문을 열었는데, 이제 줄의
+       주인공이 원본 파일이라 열 본문이 그 줄에 없습니다 — 누르면 아무 일도 안 일어나는
+       줄은 고장으로 보입니다. */
     var card = e.target.closest('.item');
-    if (card) openDoc(card.dataset.doc);
+    var dl = card && card.querySelector('.dl');
+    if (dl) dl.click();
   });
   $('sort').addEventListener('change', function (e) { state.sort = e.target.value; state.limit = pageSize(); renderFiles(); });
   pageSizeEl.addEventListener('change', function () { state.limit = pageSize(); renderFiles(); });
@@ -1168,9 +1217,19 @@
       state.docs = r.docs || [];
       /* '보관 중인 자료' 도 **받을 수 있는 것**을 셉니다. 본문(.md)은 검색용이라
          보관물로 세면 숫자가 목록과 어긋납니다. */
-      var kept = state.docs.filter(hasOriginal);
-      $('stDocs').textContent = kept.length;
-      $('stSize').textContent = fmtSize(kept.reduce(function (a, d) { return a + (d.bytes || 0); }, 0));
+      /* **파일** 기준입니다. 문서로 세면 본문 다섯이 가리키는 PDF 하나가 다섯 건으로
+         잡혀, 목록(5줄이 아니라 1줄)과 숫자가 어긋납니다. */
+      var seen = {}, kept = 0, bytes = 0;
+      state.docs.forEach(function (d) {
+        (d.files || []).forEach(function (f) {
+          var key = d.project + '/' + f.name;
+          if (seen[key]) return;
+          seen[key] = true;
+          kept += 1; bytes += f.bytes || 0;
+        });
+      });
+      $('stDocs').textContent = kept;
+      $('stSize').textContent = fmtSize(bytes);
     });
   }
 

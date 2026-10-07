@@ -44,6 +44,9 @@ class ProjectUpdateRequest(BaseModel):
     enabled: bool | None = None
     sort: int | None = None
     role: str | None = None
+    # 사용자 화면 입력칸의 '자주 하는 질문'. `None` 은 '건드리지 않음' 이고, 빈 목록은
+    # '전부 지움' 이다 — 둘을 섞으면 지우는 방법이 없어진다.
+    questions: list[str] | None = None
 
 
 class ProjectListResponse(BaseModel):
@@ -86,6 +89,9 @@ def update_project(project_id: str, request: ProjectUpdateRequest) -> projects.P
         return projects.update_project(
             project_id, name=request.name, description=request.description,
             enabled=request.enabled, sort=request.sort,
+            # `role` 은 요청 모델에만 있고 넘기지 않고 있었다 — 화면에서 용도를 바꿔도
+            # 저장되지 않았고, 오류도 나지 않았다(2026-10-07).
+            role=request.role, questions=request.questions,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

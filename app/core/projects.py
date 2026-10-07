@@ -45,6 +45,10 @@ _ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 MANIFEST = "pack.json"
 
 
+# 입력칸 드롭다운에 들어가는 수. 더 많으면 고르는 목록이 아니라 읽을거리가 된다.
+_MAX_QUESTIONS = 10
+
+
 class Project(BaseModel):
     """화면이 보는 프로젝트 한 건."""
 
@@ -56,6 +60,9 @@ class Project(BaseModel):
     # `knowledge` = 묻고 답하는 지식 자료 · `library` = 받아 쓰는 양식·템플릿(자료실).
     # 담는 것이 다를 뿐 올리고 내려주는 구조는 같아서, 저장소를 나누지 않고 표시만 둔다.
     role: str = "knowledge"
+    # 사용자 화면 입력칸의 '자주 하는 질문'. **이 프로젝트에 뭘 물어볼 수 있나**를
+     # 보여주는 것이라 분류(카테고리)와 상관이 없어 여기 둔다.
+    questions: list[str] = Field(default_factory=list)
     # 화면이 "자료를 넣어야 한다"를 바로 알아채는 숫자. 목록을 그릴 때만 센다.
     doc_count: int = 0
     qa_count: int = 0
@@ -114,6 +121,8 @@ def _read(project_dir: Path) -> Project | None:
         doc_count=len(list(docs.rglob("*.md"))) if docs.is_dir() else 0,
         qa_count=len(items),
         role=(data.get("role") or "knowledge") if isinstance(data, dict) else "knowledge",
+        questions=[q for q in (data.get("questions") or []) if str(q).strip()]
+        if isinstance(data, dict) else [],
     )
 
 
@@ -171,7 +180,7 @@ def create_project(project_id: str, name: str, description: str = "",
 
 def update_project(project_id: str, name: str | None = None, description: str | None = None,
                    enabled: bool | None = None, sort: int | None = None,
-                   role: str | None = None) -> Project:
+                   role: str | None = None, questions: list[str] | None = None) -> Project:
     pid = validate_id(project_id)
     path = _root() / pid / MANIFEST
     data = read_json(path)
@@ -190,6 +199,10 @@ def update_project(project_id: str, name: str | None = None, description: str | 
         data["sort"] = int(sort)
     if role in ("knowledge", "library"):
         data["role"] = role
+    if questions is not None:
+        # 빈 줄은 버린다. 화면이 입력칸을 더해 두고 안 채우는 일이 흔한데, 그대로 저장하면
+        # 사용자 화면에 빈 항목이 뜬다.
+        data["questions"] = [q.strip() for q in questions if q and q.strip()][:_MAX_QUESTIONS]
 
     write_json_atomic(path, _dump(data))
     log_event(logger, "project updated", project_id=pid)

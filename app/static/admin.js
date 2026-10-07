@@ -525,6 +525,11 @@ $(function(){
         $tr.append($('<td>').append($role));
         $tr.append($('<td>').append($('<input type="text" class="admin_input" data-f="description">')
           .attr('placeholder', '어떤 자료를 담는 프로젝트인지').val(p.description || '')));
+        /* 추천 질문. 줄 안에 입력칸을 여러 개 두면 표가 무너지므로 **펼치는** 방식입니다.
+           사용자 화면 입력칸을 눌렀을 때 뜨는 목록이 이것입니다. */
+        $tr.append($('<td>').append(
+          $('<button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-proj-q>')
+            .text('질문 ' + ((p.questions || []).length))));
         $tr.append($('<td>').text(p.doc_count));
         $tr.append($('<td>').text(p.qa_count));
         $tr.append($('<td>').append($('<label class="admin_switch">')
@@ -540,6 +545,44 @@ $(function(){
     }).fail(function(xhr){ toast(apiError(xhr, '프로젝트 목록을 불러오지 못했습니다'), 'err'); });
   }
 
+  /* 펼친 줄 하나. 열려 있는 동안에도 표의 다른 값은 그대로 고칠 수 있습니다. */
+  $('#panel_projects').on('click', '[data-proj-q]', function(){
+    var $tr = $(this).closest('tr'), pid = $tr.data('pid');
+    if($tr.next('.admin_subrow').length){ $tr.next().remove(); return; }
+    var p = PROJECT_ROWS.filter(function(x){ return x.project_id === pid; })[0] || {};
+    var $cells = $tr.children().length;
+    var $sub = $('<tr class="admin_subrow">').append(
+      $('<td>').attr('colspan', $cells).append(
+        $('<div class="admin_subrow_inner">')
+          .append($('<p class="admin_card_sub">').html(
+            '사용자 화면에서 <b>검색 입력칸을 누르면</b> 이 목록이 뜹니다. ' +
+            '최대 10개까지 저장되고, 빈 줄은 버립니다.'))
+          .append($('<div class="admin_rows" data-proj-qlist>'))
+          .append($('<button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-proj-qadd>')
+            .text('+ 질문 추가'))));
+    $tr.after($sub);
+    var $list = $sub.find('[data-proj-qlist]');
+    (p.questions || []).forEach(function(q){ $list.append(qRow(q)); });
+    if(!(p.questions || []).length) $list.append(qRow(''));
+  });
+
+  function qRow(value){
+    var $r = tpl('tpl_row_input').children();
+    $r.find('.admin_input').val(value)
+      .attr('placeholder', '예) API Link 가 뭔가요').attr('aria-label', '추천 질문');
+    return $r;
+  }
+
+  $('#panel_projects').on('click', '[data-proj-qadd]', function(){
+    var $list = $(this).closest('.admin_subrow_inner').find('[data-proj-qlist]');
+    $list.append(qRow(''));
+    $list.find('.admin_input').last().trigger('focus');
+  });
+
+  $('#panel_projects').on('click', '[data-row-remove]', function(){
+    $(this).closest('.admin_row_item').remove();
+  });
+
   $('#panel_projects').on('click', '[data-proj-save]', function(){
     var $tr = $(this).closest('tr'), pid = $tr.data('pid');
     var name = $.trim($tr.find('[data-f="name"]').val());
@@ -548,6 +591,12 @@ $(function(){
       name: name,
       description: $.trim($tr.find('[data-f="description"]').val()),
       role: $tr.find('[data-f="role"]').val(),
+      /* 펼쳐 둔 줄이 있을 때만 보냅니다. 안 펼쳤는데 빈 목록을 보내면 **적어 둔 질문이
+         지워집니다** — 서버에서 `null` 은 '건드리지 않음' 이고 `[]` 는 '전부 지움' 입니다. */
+      questions: $tr.next('.admin_subrow').length
+        ? $tr.next().find('[data-proj-qlist] .admin_input').map(function(){
+            return $.trim($(this).val()); }).get().filter(function(q){ return q; })
+        : null,
       enabled: $tr.find('[data-f="enabled"]').prop('checked')
     }).done(function(){ toast('저장했습니다'); renderProjectAdmin(); })
       .fail(function(xhr){ toast(apiError(xhr, '저장하지 못했습니다'), 'err'); });

@@ -107,11 +107,16 @@ def get_drive() -> DriveResponse:
             docs = _docs_of(project.project_id, project.name)
         finally:
             reset_project(token)
-        token = use_project(project.project_id)
-        try:
-            questions = _questions()
-        finally:
-            reset_project(token)
+        # 프로젝트에 적어 둔 것이 **이깁니다.** 카테고리 쪽은 이미 쓰고 있는 팩이 있어
+        # 그대로 두되, 둘 다 있으면 프로젝트 것만 씁니다 — 섞으면 관리자가 적은 순서가
+        # 깨지고, 지운 질문이 카테고리 쪽에서 되살아납니다.
+        questions = list(project.questions)
+        if not questions:
+            token = use_project(project.project_id)
+            try:
+                questions = _questions()
+            finally:
+                reset_project(token)
         out.projects.append(DriveProject(
             project_id=project.project_id, name=project.name, role=project.role,
             doc_count=len(docs), bytes=sum(d.bytes for d in docs), questions=questions,

@@ -210,3 +210,65 @@ def test_project_settings_never_escape_the_test_sandbox(isolated_data):
     assert str(isolated_data.projects_dir) in scoped.pack_dir
     assert str(isolated_data.projects_var_dir) in scoped.var_dir
     assert scoped.admin_password == isolated_data.admin_password, "격리된 설정을 물려받지 못했습니다"
+
+
+# ── 추천 질문 ──────────────────────────────────────────────────────────────
+
+
+def test_questions_live_on_the_project_not_in_a_category(client, studio, isolated_data):
+    """추천 질문은 **프로젝트에 직접** 적는다.
+
+    전에는 카테고리 안에만 있었다. 질문 몇 개를 띄우려고 분류 체계부터 만들어야 했는데,
+    추천 질문은 '이 프로젝트에 뭘 물어볼 수 있나' 를 보여주는 것이라 분류와 상관이 없다.
+    """
+    make_project(client, "api-link", "API Link")
+
+    saved = client.put("/api/admin/projects/api-link", headers=AUTH,
+                       json={"questions": ["API Link 가 뭔가요", "   ", "어떻게 신청하나요"]})
+
+    assert saved.status_code == 200
+    # 빈 줄은 버린다. 화면이 입력칸을 더해 두고 안 채우는 일이 흔한데, 그대로 저장하면
+    # 사용자 화면에 빈 항목이 뜬다.
+    assert saved.json()["questions"] == ["API Link 가 뭔가요", "어떻게 신청하나요"]
+
+
+def test_not_sending_questions_leaves_them_alone(client, studio, isolated_data):
+    """이름만 고칠 때 질문이 지워지면 안 된다.
+
+    `None`(안 보냄)과 `[]`(전부 지움)은 다르다. 섞으면 지우는 방법이 없어지거나, 다른 값을
+    고칠 때마다 질문이 사라진다.
+    """
+    make_project(client, "api-link", "API Link")
+    client.put("/api/admin/projects/api-link", headers=AUTH, json={"questions": ["질문"]})
+
+    client.put("/api/admin/projects/api-link", headers=AUTH, json={"name": "API Link 포털"})
+    assert client.get("/api/admin/projects", headers=AUTH).json()["items"][0]["questions"] == ["질문"]
+
+    client.put("/api/admin/projects/api-link", headers=AUTH, json={"questions": []})
+    assert client.get("/api/admin/projects", headers=AUTH).json()["items"][0]["questions"] == []
+
+
+def test_the_user_screen_shows_the_project_questions(client, studio, isolated_data):
+    """사용자 화면(입력칸 드롭다운)이 그 목록을 받아야 한다."""
+    make_project(client, "api-link", "API Link")
+    client.put("/api/admin/projects/api-link", headers=AUTH,
+               json={"questions": ["API Link 가 뭔가요"]})
+
+    drive = client.get("/api/drive").json()
+    mine = [p for p in drive["projects"] if p["project_id"] == "api-link"][0]
+
+    assert mine["questions"] == ["API Link 가 뭔가요"]
+
+
+def test_changing_the_role_actually_saves(client, studio, isolated_data):
+    """용도(지식/자료실)가 저장돼야 한다.
+
+    요청 모델에는 `role` 이 있는데 서비스로 **넘기지 않고 있었다** — 화면에서 바꿔도
+    저장되지 않았고 오류도 나지 않았다(2026-10-07). 사용자 화면의 메뉴가 이것으로 갈린다.
+    """
+    make_project(client, "forms", "자료실")
+
+    saved = client.put("/api/admin/projects/forms", headers=AUTH, json={"role": "library"})
+
+    assert saved.json()["role"] == "library"
+    assert client.get("/api/admin/projects", headers=AUTH).json()["items"][0]["role"] == "library"

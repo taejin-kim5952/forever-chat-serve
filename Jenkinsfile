@@ -58,6 +58,13 @@ pipeline {
             steps {
                 sh '''
                     set -e
+                    # `[ ! -f ]` 는 **못 읽을 때도** 참이 된다. 폴더 권한 때문에 안 보이는
+                    # 것을 '없다' 로 읽으면 엉뚱하게 모델을 다시 받게 된다.
+                    if [ ! -r "$DEPLOY_DIR" ]; then
+                        echo "$DEPLOY_DIR 에 들어갈 수 없습니다(지금 계정: $(id -un))."
+                        echo "배포 폴더가 /root 아래면 안 됩니다 — /root 는 dr-xr-x--- 입니다."
+                        exit 1
+                    fi
                     if [ ! -f "$DEPLOY_DIR/models/bge-m3-onnx/model.onnx" ]; then
                         echo "$DEPLOY_DIR/models/bge-m3-onnx/model.onnx 가 없습니다."
                         echo "모델을 서버에 한 번 받아 두세요 — docs/11-배포.md 의"
@@ -67,6 +74,18 @@ pipeline {
                     fi
                     if [ ! -f "$DEPLOY_DIR/.env" ]; then
                         echo "$DEPLOY_DIR/.env 가 없습니다. .env.server.example 을 복사해 채우세요."
+                        exit 1
+                    fi
+                    # 읽을 수 있는지를 **따로** 본다. 못 읽는 것과 값이 빈 것은 고치는
+                    # 방법이 전혀 다른데, 묶어서 검사하면 엉뚱한 곳을 보게 된다
+                    # (2026-10-07 첫 빌드에서 실제로 그랬다).
+                    #
+                    # jenkins 가 읽어야 하는 이유: `docker run --env-file` 은 데몬이 아니라
+                    # **docker 명령을 실행하는 계정**이 파일을 읽는다.
+                    if [ ! -r "$DEPLOY_DIR/.env" ]; then
+                        echo "$DEPLOY_DIR/.env 를 읽을 수 없습니다(지금 계정: $(id -un))."
+                        echo "서버에서:  chown root:jenkins $DEPLOY_DIR/.env && chmod 640 $DEPLOY_DIR/.env"
+                        ls -l "$DEPLOY_DIR/.env" || true
                         exit 1
                     fi
                     if ! grep -q "^ADMIN_PASSWORD=." "$DEPLOY_DIR/.env"; then

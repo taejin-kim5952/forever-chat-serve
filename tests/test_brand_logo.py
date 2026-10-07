@@ -12,7 +12,11 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from pathlib import Path
+
 from app.main import app
+
+ADMIN_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "admin.js"
 
 AUTH = {"Authorization": "Basic " + base64.b64encode(b"tester:secret").decode()}
 PNG = base64.b64decode(
@@ -28,6 +32,36 @@ def client():
 def put_logo(client, name="logo.png", data=PNG):
     return client.post("/api/admin/brand/logo", headers=AUTH,
                        files={"file": (name, data, "application/octet-stream")})
+
+
+def test_the_admin_screen_does_not_overwrite_the_logo(client, isolated_data):
+    """화면이 켜진 뒤 **자바스크립트가 로고를 글자로 덮으면 안 된다.**
+
+    관리자 화면은 프로필을 저장한 뒤 브랜드 문자열을 다시 그린다(`applyBrand`). 그 함수가
+    `[data-brand]` 전부에 `.text()` 를 넣는데, 로고 자리에도 `data-brand` 가 붙어 있다 —
+    서버가 거기 박아 둔 `<img>` 가 조직 이름 글자로 바뀐다.
+
+    2026-10-07 에 그랬다. **서버는 멀쩡히 `<img>` 를 내려주고 있었고**, 그래서 응답을
+    보는 테스트(`test_uploaded_logo_replaces_the_letters_on_both_screens`)는 통과했다.
+    화면이 켜진 뒤에 벌어지는 일이라 브라우저로 봐야만 보였다. 사용자 화면은 이 함수가
+    없어서 멀쩡했다.
+    """
+    source = ADMIN_JS.read_text(encoding="utf-8")
+    start = source.index("$('[data-brand]').each(")
+    # 주석에도 `.text()` 와 `data-brand-logo` 가 적혀 있다. 주석에 걸리면 코드가 틀려도
+    # 테스트가 통과하므로, **주석을 걷어내고** 실행되는 줄만 본다.
+    lines = [line for line in source[start:start + 2000].splitlines()
+             if not line.lstrip().startswith(("/*", "*", "//"))]
+    block = chr(10).join(lines)
+
+    guard = [line for line in lines if "data-brand-logo" in line and "return" in line]
+    assert guard, (
+        "applyBrand 가 로고 자리를 걸러내지 않습니다 — 서버가 박아 둔 <img> 를 "
+        "조직 이름 글자로 덮습니다"
+    )
+    assert block.index(guard[0]) < block.index("$(this).text("), (
+        "로고 자리를 거르는 검사가 .text() 보다 뒤에 있습니다"
+    )
 
 
 def test_no_logo_means_the_text_badge_stays(client, isolated_data):

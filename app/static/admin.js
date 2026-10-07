@@ -588,6 +588,14 @@ $(function(){
       '{service_desc}':BRAND.service_desc || ''
     };
     $('[data-brand]').each(function(){
+      /* 로고 자리는 **건너뜁니다.** 서버가 거기에 <img> 를 박아 두는데(app/main.py 의
+         _apply_logo), 여기서 .text() 로 덮으면 로고가 조직 이름 글자로 바뀝니다 —
+         화면이 켜진 직후 로고가 보였다가 글자로 바뀝니다(2026-10-07 에 관리자 화면에서
+         그랬습니다. 사용자 화면은 이 함수가 없어서 멀쩡했습니다).
+
+         **이미지가 들어 있을 때만** 건너뜁니다. 로고를 안 올린 설치는 그 자리가 글자
+         배지라, 조직 이름을 바꾸면 그 자리에서 같이 바뀌어야 합니다. */
+      if(this.hasAttribute('data-brand-logo') && $(this).find('img').length) return;
       var out = $(this).attr('data-brand');
       $.each(v, function(k, val){ out = out.split(k).join(val); });
       if(this.tagName.toLowerCase() === 'title') document.title = out;

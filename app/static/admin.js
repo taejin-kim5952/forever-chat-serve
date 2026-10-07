@@ -481,6 +481,7 @@ $(function(){
     $('#panel_' + key).addClass('is_active');
     if(key === 'review') renderReview();
     if(key === 'projects') renderProjectAdmin();
+    if(key === 'personas') renderPersonas();
     if(key === 'flow') renderFlow();
     if(location.hash !== '#' + key) history.replaceState(null, '', '#' + key);
   }
@@ -510,6 +511,67 @@ $(function(){
   /* 이름이 `renderProjects` 가 아닌 이유: 상단 **프로젝트 선택기**가 이미 그 이름을
      쓰고 있습니다(파일 아래쪽). 자바스크립트는 같은 이름의 함수 선언이 둘이면 뒤엣것만
      남겨서, 겹치는 순간 이 표가 **아무 말 없이 안 그려집니다**(2026-10-07 에 겪음). */
+  /* ---------- AI 미팅 참가자 ----------
+     순서가 **발언 순서**라 항목 하나씩 저장하지 않고 목록을 통째로 보냅니다. 하나씩 고치면
+     순서를 맞추는 요청이 따로 필요하고, 그 둘이 어긋나면 화면에서 본 순서와 실제 발언
+     순서가 달라집니다. */
+  function pnRow(p){
+    p = p || {};
+    var $r = $('<div class="admin_row_item admin_pn">').attr('data-pid', p.persona_id || '');
+    $r.append($('<input type="text" class="admin_input admin_pn_name" data-f="name" placeholder="이름 (예: 기획자)">').val(p.name || ''));
+    $r.append($('<input type="text" class="admin_input admin_pn_title" data-f="title" placeholder="한 줄 소개 (예: 서비스 기획)">').val(p.title || ''));
+    $r.append($('<textarea class="admin_input admin_pn_prompt" data-f="prompt" rows="2" placeholder="무엇을 먼저 보는 사람인지 적어 주세요. 예) 사용자가 겪는 문제와 쓰임새를 먼저 봅니다."></textarea>').val(p.prompt || ''));
+    $r.append($('<label class="admin_switch admin_pn_on">')
+      .append($('<input type="checkbox" data-f="enabled">').prop('checked', p.enabled !== false))
+      .append($('<span>')));
+    $r.append($('<button type="button" class="admin_row_x" data-row-remove aria-label="삭제">✕</button>'));
+    return $r;
+  }
+
+  function renderPersonas(){
+    API.get('/api/admin/personas').done(function(r){
+      var items = (r && r.personas) || [];
+      $('#pnMax').text(r.max_in_meeting || 6);
+      var $w = $('#pnRows').empty();
+      items.forEach(function(p){ $w.append(pnRow(p)); });
+      $('#pnEmpty').prop('hidden', items.length > 0);
+    }).fail(function(xhr){ toast(apiError(xhr, '참가자를 불러오지 못했습니다'), 'err'); });
+  }
+
+  $('#pnAdd').on('click', function(){
+    $('#pnRows').append(pnRow({})).scrollTop(99999);
+    $('#pnRows').find('.admin_pn_name').last().trigger('focus');
+    $('#pnEmpty').prop('hidden', true);
+  });
+
+  $('#pnRows').on('click', '[data-row-remove]', function(){
+    $(this).closest('.admin_row_item').remove();
+    $('#pnEmpty').prop('hidden', $('#pnRows').children().length > 0);
+  });
+
+  $('#pnSave').on('click', function(){
+    var items = $('#pnRows').children().map(function(){
+      var $r = $(this);
+      return {
+        /* 이미 있던 참가자는 **id 를 그대로** 보냅니다. id 가 바뀌면 그 참가자를 고른
+           회의와 이어지지 않습니다. */
+        persona_id: $r.attr('data-pid') || '',
+        name: $.trim($r.find('[data-f="name"]').val()),
+        title: $.trim($r.find('[data-f="title"]').val()),
+        prompt: $.trim($r.find('[data-f="prompt"]').val()),
+        enabled: $r.find('[data-f="enabled"]').prop('checked')
+      };
+    }).get();
+    if(items.some(function(p){ return !p.name; })){
+      toast('이름이 비어 있는 참가자가 있습니다', 'err');
+      return;
+    }
+    saveState('pn', 'saving');
+    API.send('PUT', '/api/admin/personas', { personas: items })
+      .done(function(){ saveState('pn', 'ok'); toast('참가자를 저장했습니다', 'ok'); renderPersonas(); })
+      .fail(function(xhr){ saveState('pn', 'err'); toast(apiError(xhr, '저장하지 못했습니다'), 'err'); });
+  });
+
   function renderProjectAdmin(){
     API.get('/api/admin/projects').done(function(r){
       PROJECT_ROWS = (r && r.items) || [];

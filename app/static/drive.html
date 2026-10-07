@@ -38,6 +38,7 @@
   <symbol id="ic-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
   <symbol id="ic-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
   <symbol id="ic-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="ic-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6"/><path d="M17.5 13.6A5.5 5.5 0 0 1 21 19"/></symbol>
   <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
 </svg>
 
@@ -57,6 +58,9 @@
            자리를 남겨 두면 '없다' 와 '아직 안 불렀다' 를 구분할 수 없어, 자리까지 감춥니다. -->
       <div class="nav_sub" id="navProjects" hidden></div>
       <a href="#" id="navLibrary"><svg class="i"><use href="#ic-download"/></svg><span>자료실</span></a>
+      <!-- 역할이 다른 AI 참가자들이 한 주제를 두고 이야기합니다. 참가자는 관리자
+           화면에서 만들어 둡니다. 운영에서는 열 수 없어 화면이 잠급니다. -->
+      <a href="#" id="navMeeting"><svg class="i"><use href="#ic-people"/></svg><span>AI 프로젝트 미팅</span></a>
       <a href="/admin"><svg class="i"><use href="#ic-admin"/></svg><span>관리자 설정</span></a>
     </nav>
 
@@ -156,6 +160,46 @@
       <div class="page-title">
         <h1 id="pageTitle">AI 지식 검색</h1><span class="crumb" id="crumb">전체 자료에서 찾습니다</span>
       </div>
+
+      <!-- ───── AI 프로젝트 미팅 ─────
+           자료 검색과 **다른 화면**입니다. 한 패널에 섞으면 지금 무엇을 보고 있는지가
+           흐려집니다. 프로젝트를 고른 상태에서만 의미가 있습니다 — 그 프로젝트의 자료를
+           근거로 이야기하기 때문입니다. -->
+      <section class="mt" id="meetingPane" hidden>
+        <form class="mt_ask" id="mtForm">
+          <div class="mt_row">
+            <span class="ai-badge"><svg class="i"><use href="#ic-people"/></svg><span>회의 주제</span></span>
+            <input id="mtTopic" autocomplete="off" aria-label="회의 주제"
+                   placeholder="무엇을 함께 생각해볼까요? 예) 사용 이력 통계 화면을 넣는다면 무엇을 먼저 봐야 할까요">
+            <button class="send" id="mtSend" type="submit" aria-label="회의 열기"><svg class="i"><use href="#ic-send"/></svg></button>
+          </div>
+          <div class="mt_opts">
+            <span class="mt_opt_label">참가자</span>
+            <span class="mt_people" id="mtPeople"></span>
+            <span class="mt_opt_label">바퀴</span>
+            <select class="mt_rounds" id="mtRounds" aria-label="발언 바퀴 수">
+              <option value="1" selected>1바퀴</option>
+              <option value="2">2바퀴</option>
+              <option value="3">3바퀴</option>
+            </select>
+            <span class="mt_note" id="mtNote"></span>
+          </div>
+        </form>
+
+        <div class="mt_board" id="mtBoard" hidden>
+          <div class="mt_head">
+            <span class="mt_head_t" id="mtHeadTopic"></span>
+            <button type="button" class="mt_x" id="mtClose" aria-label="회의 닫기"><svg class="i"><use href="#ic-x"/></svg></button>
+          </div>
+          <div class="mt_srcs" id="mtSrcs" hidden></div>
+          <div class="mt_turns" id="mtTurns"></div>
+          <div class="mt_wait" id="mtWait" hidden><span class="dot"></span><span id="mtWaitWho">여는 중…</span></div>
+          <div class="mt_sum" id="mtSum" hidden>
+            <div class="mt_sum_h"><svg class="i"><use href="#ic-check"/></svg>정리</div>
+            <div class="mt_sum_b" id="mtSumBody"></div>
+          </div>
+        </div>
+      </section>
 
       <!-- AI 질문 — 한 줄로 묻고, 답이 나오면 이 카드 안에서 대화가 된다 -->
       <form class="ai-search" id="aiForm" role="search">

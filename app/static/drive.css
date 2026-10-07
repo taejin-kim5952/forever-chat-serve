@@ -499,3 +499,68 @@
     transition:background .12s,color .12s;
   }
   .ai-faq_item:hover{background:var(--brand-soft);color:var(--brand-dark)}
+
+  /* ---------- AI 프로젝트 미팅 (2026-10-07) ----------
+     자료 검색과 **다른 화면**입니다. 메뉴를 고르면 목록·검색 자리를 대신 차지합니다. */
+  .app.is_meeting .drive, .app.is_meeting .ai-search, .app.is_meeting .ans{display:none}
+  .mt{display:flex;flex-direction:column;gap:14px}
+  .mt_ask{border-radius:18px;border:1.5px solid var(--brand);background:#fff;
+          box-shadow:0 10px 24px rgba(16,24,40,.06)}
+  .mt_row{display:flex;align-items:center;gap:14px;height:68px;padding:0 10px 0 22px}
+  .mt_row input{flex:1;min-width:0;border:0;outline:0;font-size:15px;color:var(--ink);background:none}
+  .mt_opts{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+           padding:12px 22px;border-top:1px solid var(--line)}
+  .mt_opt_label{flex:none;font-size:12px;font-weight:700;color:var(--muted)}
+  .mt_people{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+  /* 고른 참가자는 **채워서** 보여 줍니다. 빼는 것이 목적이라 처음엔 전원이 켜져 있습니다. */
+  .mt_chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;
+           border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px;
+           color:var(--muted);transition:background .15s,border-color .15s,color .15s}
+  .mt_chip b{font-weight:700}
+  .mt_chip i{font-style:normal;font-size:11px;opacity:.75}
+  .mt_chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .mt_empty{font-size:12.5px;color:var(--muted)}
+  .mt_rounds{height:30px;border:1px solid var(--line);border-radius:8px;padding:0 8px;
+             font-size:12.5px;color:var(--ink);background:#fff}
+  .mt_note{flex:1;min-width:160px;text-align:right;font-size:12px;color:var(--muted)}
+
+  .mt_board{border:1px solid var(--line);border-radius:18px;background:#fff;padding:18px 22px}
+  .mt_head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .mt_head_t{flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink)}
+  .mt_x{flex:none;width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:8px;
+        background:none;color:var(--muted);cursor:pointer}
+  .mt_x:hover{background:var(--brand-soft);color:var(--brand)}
+
+  .mt_srcs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px;
+           padding-bottom:12px;border-bottom:1px dashed var(--line)}
+  .mt_srcs_h{font-size:11.5px;font-weight:700;color:var(--muted)}
+  .mt_srcs_h.is_none{font-weight:500}
+  .mt_src{font-size:11.5px;color:var(--muted);background:var(--line);border-radius:999px;padding:3px 9px}
+
+  .mt_turns{display:flex;flex-direction:column;gap:16px}
+  .mt_turn{display:flex;flex-direction:column;gap:6px}
+  .mt_turn.is_fail{opacity:.6}
+  .mt_who{display:flex;align-items:center;gap:8px}
+  .mt_who b{font-size:13.5px;font-weight:700;color:var(--brand-dark)}
+  .mt_who i{font-style:normal;font-size:11.5px;color:var(--muted)}
+  .mt_round{margin-left:auto;font-size:11px;color:var(--muted)}
+  .mt_text{font-size:14px;line-height:1.75;color:var(--ink);
+           border-left:2px solid var(--line);padding-left:14px}
+  .mt_text p{margin:0 0 8px}
+  .mt_text p:last-child{margin-bottom:0}
+  .mt_text ul,.mt_text ol{margin:0 0 8px;padding-left:20px}
+
+  .mt_wait{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12.5px;color:var(--muted)}
+  .mt_wait .dot{width:7px;height:7px;border-radius:50%;background:var(--brand);
+                animation:mtPulse 1.1s ease-in-out infinite}
+  @keyframes mtPulse{0%,100%{opacity:.25}50%{opacity:1}}
+
+  /* 정리는 **눈에 띄게** 둡니다. 읽는 사람이 필요한 것은 네 사람의 말이 아니라 결론입니다. */
+  .mt_sum{margin-top:18px;padding:16px 18px;border-radius:12px;background:var(--brand-soft)}
+  .mt_sum_h{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;
+            color:var(--brand-dark);margin-bottom:8px}
+  .mt_sum_h svg.i{width:16px;height:16px}
+  .mt_sum_b{font-size:13.5px;line-height:1.75;color:var(--ink)}
+  .mt_sum_b h2{font-size:13px;font-weight:700;color:var(--brand-dark);margin:12px 0 4px}
+  .mt_sum_b h2:first-child{margin-top:0}
+  .mt_sum_b ul{margin:0 0 8px;padding-left:20px}

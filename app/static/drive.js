@@ -316,6 +316,7 @@
     /* 프로젝트를 바꾸면 **앞 답은 지웁니다.** 검색 범위가 달라졌는데 그 답이 남아 있으면
        새 프로젝트에서 나온 답으로 읽힙니다 — 참고 자료도 앞 프로젝트 것입니다. */
     clearPanel();
+    if (state.view === 'meeting') mtSyncNote();   /* 회의 안내도 그 프로젝트 기준으로 */
   }
 
   var prev = $('prev'), next = $('next');
@@ -1082,6 +1083,7 @@
       selectProject(a.dataset.np || null);
     });
     $('navLibrary').addEventListener('click', function (e) { e.preventDefault(); setView('library'); });
+    $('navMeeting').addEventListener('click', function (e) { e.preventDefault(); setView('meeting'); });
 
     /* 입력칸을 누르면 펼치고, 벗어나면 닫습니다. 글자를 넣기 시작하면 닫습니다 —
        직접 쓰는 사람에게 목록이 가리고 있을 이유가 없습니다. */
@@ -1130,7 +1132,8 @@
   }
   function inView(p) { return ((p && p.role) || 'knowledge') === viewRole(); }
 
-  var VIEW_TITLE = { search: 'AI 지식 검색', browse: '프로젝트', library: '자료실' };
+  var VIEW_TITLE = { search: 'AI 지식 검색', browse: '프로젝트', library: '자료실',
+                     meeting: 'AI 프로젝트 미팅' };
 
   /* ---------- 좌측 `프로젝트` 하위 메뉴 ----------
      폴더 카드와 **같은 것을 두 군데**에서 고를 수 있습니다. 카드는 둘러보는 자리이고,
@@ -1165,6 +1168,12 @@
     $('navAsk').classList.toggle('active', search);
     $('navDrive').classList.toggle('active', view === 'browse');
     $('navLibrary').classList.toggle('active', view === 'library');
+    $('navMeeting').classList.toggle('active', view === 'meeting');
+    /* 회의 화면은 자료 목록·검색과 **겹치지 않습니다.** 한 화면에 섞으면 지금 무엇을 보고
+       있는지가 흐려집니다. */
+    show($('meetingPane'), view === 'meeting');
+    $('app').classList.toggle('is_meeting', view === 'meeting');
+    if (view === 'meeting') { mtInit(); return; }
     openNavProjects(view === 'browse');
     faqOpen(false);     /* 범위가 바뀌면 열려 있던 목록은 닫습니다 */
     /* 검색 화면이 아니면 **답이 있을 때만** 패널을 둡니다. 추천 질문만 들어 있는 패널이
@@ -1209,6 +1218,154 @@
                                   : '프로젝트를 고르면 그 안에서만 찾습니다');
     $('aiQ').placeholder = p ? p.name + ' 에서 찾습니다. 한 문장으로 물어보세요.' : DEFAULT_ASK;
   }
+
+  /* ================= AI 프로젝트 미팅 =================
+     역할이 다른 AI 참가자들이 한 주제를 두고 차례로 말합니다. 참가자는 **관리자 화면**에서
+     만들어 둡니다 — 화면에 박아 두면 납품처마다 소스를 고치게 됩니다.
+
+     한 바퀴에 수십 초가 걸리므로 발언이 끝날 때마다 하나씩 받습니다(SSE). 다 끝난 뒤에
+     한 번에 받으면 그동안 멈춘 것과 구분되지 않습니다. */
+  var mt = { loaded: false, people: [], picked: {}, max: 6, available: true, stream: null };
+
+  function mtInit() {
+    if (mt.loaded) { mtSyncNote(); return; }
+    mt.loaded = true;
+    fetch('/api/meeting/personas').then(function (r) { return r.json(); }).then(function (d) {
+      mt.people = d.personas || [];
+      mt.max = d.max_in_meeting || 6;
+      mt.available = d.available !== false;
+      /* 처음엔 **전원을 고른 상태**로 둡니다. 한 명도 안 골라진 채로 두면 주제를 적고
+         보내다 거절당합니다 — 고르는 것이 목적이 아니라 빼는 것이 목적입니다. */
+      mt.people.slice(0, mt.max).forEach(function (p) { mt.picked[p.persona_id] = true; });
+      mtRenderPeople();
+      mtSyncNote();
+    }, function () { $('mtNote').textContent = '참가자를 불러오지 못했습니다.'; });
+  }
+
+  function mtRenderPeople() {
+    var box = $('mtPeople');
+    box.innerHTML = '';
+    if (!mt.people.length) {
+      box.innerHTML = '<span class="mt_empty">관리자 설정 → AI 미팅 참가자에서 먼저 만들어 주세요.</span>';
+      return;
+    }
+    mt.people.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mt_chip' + (mt.picked[p.persona_id] ? ' on' : '');
+      b.setAttribute('aria-pressed', mt.picked[p.persona_id] ? 'true' : 'false');
+      b.innerHTML = '<b>' + esc(p.name) + '</b>' + (p.title ? '<i>' + esc(p.title) + '</i>' : '');
+      b.addEventListener('click', function () {
+        if (!mt.picked[p.persona_id] && mtPicked().length >= mt.max) {
+          toast(mt.max + '명까지 고를 수 있습니다');
+          return;
+        }
+        mt.picked[p.persona_id] = !mt.picked[p.persona_id];
+        mtRenderPeople(); mtSyncNote();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function mtPicked() {
+    return mt.people.filter(function (p) { return mt.picked[p.persona_id]; });
+  }
+
+  /* 보낼 수 있는 상태인지 한 줄로 알려 줍니다. 버튼만 잠그면 왜 안 되는지 알 수 없습니다. */
+  function mtSyncNote() {
+    var p = projectOf(state.projectId);
+    var n = mtPicked().length;
+    var why = !mt.available ? '운영에서는 회의를 열 수 없습니다. 스튜디오에서 진행합니다.'
+      : !p ? '왼쪽에서 프로젝트를 먼저 고르세요. 그 프로젝트의 자료를 근거로 이야기합니다.'
+      : !n ? '참가자를 한 명 이상 고르세요.'
+      : n + '명이 ' + p.name + ' 자료를 보고 이야기합니다.';
+    $('mtNote').textContent = why;
+    $('mtSend').disabled = !(mt.available && p && n) || !!mt.stream;
+  }
+
+  function mtOpen() {
+    var topic = $('mtTopic').value.trim();
+    if (!topic || mt.stream) return;
+    if (!mt.available || !state.projectId || !mtPicked().length) { mtSyncNote(); return; }
+
+    $('mtBoard').hidden = false;
+    $('mtHeadTopic').textContent = '“' + topic + '”';
+    $('mtTurns').innerHTML = '';
+    $('mtSrcs').hidden = true; $('mtSrcs').innerHTML = '';
+    $('mtSum').hidden = true; $('mtSumBody').innerHTML = '';
+    $('mtWait').hidden = false; $('mtWaitWho').textContent = '자료를 찾는 중…';
+
+    var qs = 'topic=' + encodeURIComponent(topic) +
+      '&personas=' + encodeURIComponent(mtPicked().map(function (p) { return p.persona_id; }).join(',')) +
+      '&rounds=' + encodeURIComponent($('mtRounds').value || '1') +
+      '&project=' + encodeURIComponent(state.projectId);
+    mt.stream = new EventSource('/api/meeting/stream?' + qs);
+    mtSyncNote();
+
+    mt.stream.addEventListener('opened', function (e) {
+      var d = JSON.parse(e.data);
+      if (d.sources && d.sources.length) {
+        $('mtSrcs').innerHTML = '<span class="mt_srcs_h">보는 자료</span>' +
+          d.sources.map(function (x) { return '<span class="mt_src">' + esc(x.title) + '</span>'; }).join('');
+        $('mtSrcs').hidden = false;
+      } else {
+        /* 자료가 없으면 **그렇다고 말합니다.** 조용히 넘어가면 지어낸 말을 근거 있는
+           이야기로 읽습니다. */
+        $('mtSrcs').innerHTML = '<span class="mt_srcs_h is_none">이 주제로 찾은 자료가 없습니다 — 참가자들이 아는 척하지 않도록 일러 두었습니다.</span>';
+        $('mtSrcs').hidden = false;
+      }
+      $('mtWaitWho').textContent = (d.personas[0] || {}).name + ' 가 말하는 중…';
+    });
+
+    mt.stream.addEventListener('turn', function (e) {
+      var t = JSON.parse(e.data);
+      var el = document.createElement('article');
+      el.className = 'mt_turn' + (t.text ? '' : ' is_fail');
+      el.innerHTML = '<div class="mt_who"><b>' + esc(t.name) + '</b>' +
+        (t.title ? '<i>' + esc(t.title) + '</i>' : '') +
+        '<span class="mt_round">' + t.round + '바퀴</span></div>' +
+        '<div class="mt_text">' + (t.text ? md(t.text) : '<span class="muted">말하지 못했습니다.</span>') + '</div>';
+      $('mtTurns').appendChild(el);
+      var next = mtNextName(t);
+      $('mtWaitWho').textContent = next ? next + ' 가 말하는 중…' : '정리하는 중…';
+    });
+
+    mt.stream.addEventListener('summary', function (e) {
+      var d = JSON.parse(e.data);
+      $('mtSumBody').innerHTML = d.text ? md(d.text) : '<span class="muted">정리하지 못했습니다.</span>';
+      $('mtSum').hidden = false;
+    });
+
+    mt.stream.addEventListener('done', function () { mtEnd(); });
+    mt.stream.onerror = function () {
+      if (!$('mtTurns').children.length) {
+        $('mtTurns').innerHTML = '<p class="muted">회의를 열지 못했습니다. 잠시 뒤 다시 시도해 주세요.</p>';
+      }
+      mtEnd();
+    };
+  }
+
+  /* 다음에 말할 사람. 기다리는 동안 **누구를 기다리는지** 보여 주면 멈춘 것과 구분됩니다. */
+  function mtNextName(t) {
+    var people = mtPicked();
+    var i = people.map(function (p) { return p.persona_id; }).indexOf(t.persona_id);
+    if (i < 0) return '';
+    if (i + 1 < people.length) return people[i + 1].name;
+    return t.round < Number($('mtRounds').value || 1) ? people[0].name : '';
+  }
+
+  function mtEnd() {
+    if (mt.stream) { mt.stream.close(); mt.stream = null; }
+    $('mtWait').hidden = true;
+    mtSyncNote();
+  }
+
+  $('mtForm').addEventListener('submit', function (e) { e.preventDefault(); mtOpen(); });
+  $('mtClose').addEventListener('click', function () {
+    mtEnd();
+    $('mtBoard').hidden = true;
+    $('mtTopic').value = '';
+  });
 
   /* ================= 시작 ================= */
   function refresh() {

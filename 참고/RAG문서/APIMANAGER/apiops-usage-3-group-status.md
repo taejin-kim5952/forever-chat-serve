@@ -1,6 +1,7 @@
 ---
 title: API 그룹 현황 화면
 category: 이용가이드 > API 그룹 현황
+source_files: [API_Manager_이용가이드_API등록배포절차.pdf]
 url: /v2/apiops/usage-guide/group-status
 updated: 2026-10-06
 ---

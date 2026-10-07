@@ -1,0 +1,139 @@
+"""AI 프로젝트 미팅 — 역할이 다른 참가자들이 한 주제를 두고 이야기한다.
+
+### 왜 `app/studio/` 에 있는가
+
+LLM 을 부르기 때문이다. 운영 경로(`app/pipeline/retrieve.py`)에서 이 패키지를 import 하면
+"운영에서는 LLM 을 쓰지 않는다"는 이 프로젝트의 전제가 깨진다(CLAUDE.md).
+
+### 자료를 읽고 말한다
+
+주제로 프로젝트 문서를 한 번 검색해 발췌를 뽑고, 참가자 **전원이 같은 발췌**를 본다. 사람의
+회의에서 같은 자료를 펴 놓고 이야기하는 것과 같다. 참가자마다 따로 검색하면 서로 다른 것을
+보고 말해 대화가 엇갈리고, 임베딩 호출도 참가자 수만큼 늘어난다.
+
+발췌가 없으면 **그렇다고 말하고 시작한다.** 자료 없이 그럴듯한 말을 지어내는 것은 이 제품이
+가장 피하려는 것이다.
+
+### 한 바퀴씩 돈다
+
+참가자가 차례로 한 번씩 말하는 것을 한 라운드로 본다. 뒤에 말하는 사람은 앞사람의 말을
+본다 — 그래야 '토론'이 되고, 안 그러면 같은 자료에 대한 독백 네 개가 된다.
+
+마지막에 **정리**를 한 번 더 부른다. 읽는 사람이 필요한 것은 네 사람의 말이 아니라 그래서
+무엇을 하면 되는가다.
+"""
+
+from collections.abc import Iterator
+
+from app.core.logging import get_logger, log_event
+from app.core.personas import Persona
+from app.studio.ask import build_context
+from app.studio.generate import qa_rules
+from app.studio.llm import StudioLlm
+
+logger = get_logger("studio.meeting")
+
+# 한 사람이 한 번에 말하는 길이. 길어지면 읽히지 않고, 뒤에 말하는 사람의 프롬프트도
+# 그만큼 길어져 컨텍스트가 빨리 찬다.
+MAX_TURN_CHARS = 700
+
+_TURN_PROMPT = """[회의 주제]
+{topic}
+
+[참고 자료] {source_note}
+{context}
+
+[지금까지 나온 이야기]
+{history}
+
+[당신]
+{name}{title} 입니다. {prompt}
+
+위 주제에 대해 **{name} 의 눈으로** 한 번 말하세요.
+
+- **앞사람이 한 말을 되풀이하지 마세요.** 같은 생각이면 "동의한다" 고 한 줄로 적고 넘어가고,
+  당신만 볼 수 있는 것을 더하세요.
+- 참고 자료에 있는 것은 **근거로 쓰고**, 없는 것은 **없다고 말하세요.** 자료에 없는 사실을
+  지어내지 마세요. 짐작이면 "확인이 필요하다" 고 적습니다.
+- 질문을 남겨도 됩니다. 결론이 날 때까지 혼자 끌고 가지 마세요.
+- 발췌에 붙은 **번호(`[1]` · `근거 자료 [2]`)를 글에 쓰지 마세요.** 회의록을 읽는 사람에게는
+  그 번호가 가리키는 것이 없습니다. 필요하면 문서 이름으로 적습니다.
+- {limit}자 안쪽으로, 문단 한두 개로 씁니다. 제목을 달지 마세요.
+
+당신이 할 말만 쓰세요. 이름이나 `{name}:` 같은 머리말을 붙이지 마세요."""
+
+_SUMMARY_PROMPT = """[회의 주제]
+{topic}
+
+[나온 이야기]
+{history}
+
+위 회의를 정리하세요. 읽는 사람이 필요한 것은 네 사람의 말이 아니라 **그래서 무엇을 하면
+되는가**입니다.
+
+아래 세 묶음으로만 씁니다. 해당하는 것이 없는 묶음은 **통째로 빼세요** — 빈 제목만 남으면
+정리가 안 된 것처럼 보입니다.
+
+## 합의된 것
+## 갈린 것
+## 확인이 필요한 것
+
+- 각 묶음은 `-` 글머리 목록으로, 항목마다 한 줄입니다.
+- **나온 말만 적습니다.** 회의에서 안 나온 것을 정리에서 새로 만들지 마세요.
+- 누가 말했는지는 적지 않습니다. 결론만 남깁니다."""
+
+
+def _history(turns: list[dict]) -> str:
+    if not turns:
+        return "(아직 없습니다. 당신이 첫 발언입니다.)"
+    return "\n\n".join(f"[{t['name']}] {t['text']}" for t in turns)
+
+
+def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
+        model: str | None = None) -> Iterator[tuple[str, dict]]:
+    """회의를 진행하며 발언이 끝날 때마다 하나씩 내보낸다.
+
+    `("turn", {...})` 과 `("summary", {...})` 를 순서대로 돌려준다. 화면이 기다리지 않고
+    한 사람씩 그릴 수 있어야 한다 — 참가자 넷이면 한 바퀴에 수십 초가 걸린다.
+
+    **예외를 밖으로 내지 않는다.** 한 사람이 실패해도 회의는 이어지고, 그 자리는 '말하지
+    못했다'로 남는다. 모델이 하나 죽었다고 회의 전체가 사라지면 앞의 발언까지 잃는다.
+    """
+    llm = StudioLlm(model=model or None)
+    context = build_context(hits, budget=llm.source_budget_chars()) if hits else ""
+    source_note = ("아래 발췌는 이 프로젝트의 자료에서 주제로 찾은 것입니다."
+                   if hits else "**이 주제로 찾은 자료가 없습니다.** 아는 것처럼 말하지 마세요.")
+
+    turns: list[dict] = []
+    for round_no in range(1, max(1, rounds) + 1):
+        for persona in personas:
+            prompt = _TURN_PROMPT.format(
+                topic=topic, context=context or "(없음)", source_note=source_note,
+                history=_history(turns), name=persona.name,
+                title=f"({persona.title})" if persona.title else "",
+                prompt=persona.prompt or "맡은 자리에서 보이는 것을 말합니다.",
+                limit=MAX_TURN_CHARS,
+            )
+            try:
+                text = llm.chat(prompt, system=qa_rules()).strip()
+            except Exception as exc:          # noqa: BLE001 - 한 사람이 죽어도 회의는 이어진다
+                log_event(logger, "meeting turn failed", persona=persona.persona_id,
+                          error=str(exc))
+                text = ""
+            turn = {
+                "persona_id": persona.persona_id, "name": persona.name,
+                "title": persona.title, "round": round_no, "text": text,
+            }
+            if text:
+                turns.append(turn)
+            yield "turn", turn
+
+    if not turns:
+        return
+    try:
+        summary = llm.chat(_SUMMARY_PROMPT.format(topic=topic, history=_history(turns)),
+                           system=qa_rules()).strip()
+    except Exception as exc:                  # noqa: BLE001
+        log_event(logger, "meeting summary failed", error=str(exc))
+        summary = ""
+    yield "summary", {"text": summary, "model": llm.model}

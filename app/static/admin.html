@@ -48,6 +48,10 @@
       <span class="admin_nav_item_txt">프로젝트</span>
       <span class="admin_nav_studio_mark" aria-hidden="true">✳</span>
     </button>
+    <button type="button" class="admin_nav_item" data-tab="personas" data-studio-only>
+      <span class="admin_nav_item_txt">AI 미팅 참가자</span>
+      <span class="admin_nav_studio_mark" aria-hidden="true">✳</span>
+    </button>
     <button type="button" class="admin_nav_item" data-tab="docs">
       <span class="admin_nav_item_txt">RAG 문서</span>
       <span class="admin_nav_spin" data-nav-spin="docs" aria-label="진행 중" hidden></span>
@@ -618,6 +622,36 @@
 <!-- ============================================================
      ⑤ RAG 문서
      ============================================================ -->
+<!-- AI 프로젝트 미팅 참가자 — 사용자 화면에서 토론을 여는 사람이 이 중에서 고릅니다.
+     설치 전체 공용입니다(프로젝트마다 따로 두지 않습니다) — 역할의 성격은 프로젝트가
+     달라도 같고, 따로 두면 같은 이름이 프로젝트에 따라 다르게 말합니다. -->
+<section class="admin_panel" id="panel_personas" role="tabpanel">
+  <div class="admin_panel_head">
+    <div>
+      <h2 class="admin_panel_title">AI 미팅 참가자</h2>
+      <p class="admin_panel_sub">사용자 화면의 <b>AI 프로젝트 미팅</b>에서 고르는 참가자입니다. 적어 둔 <b>순서대로 발언</b>합니다.</p>
+    </div>
+    <div class="admin_panel_head_right">
+      <button type="button" class="qr_pill qr_pill_outline" id="pnAdd" data-studio-only>+ 참가자</button>
+      <button type="button" class="qr_pill qr_pill_teal" id="pnSave" data-studio-only>저장</button>
+      <span class="admin_save_state" data-save-state="pn"><span class="qr_spinner"></span><span class="admin_save_txt"></span></span>
+    </div>
+  </div>
+
+  <div class="admin_notice" data-serve-only>
+    운영에서는 참가자를 조회만 할 수 있습니다. 편집은 스튜디오에서 진행합니다.
+  </div>
+
+  <div class="admin_card">
+    <p class="admin_card_sub">
+      <b>성격이 아니라 '무엇을 먼저 보는 사람인가'</b>를 적어 주세요. 말투만 적으면 참가자들이
+      같은 말을 어미만 바꿔 되풀이합니다. 한 회의에 <b id="pnMax">6</b>명까지 부를 수 있습니다.
+    </p>
+    <div class="admin_rows" id="pnRows"></div>
+    <p class="admin_empty" id="pnEmpty" hidden>참가자가 없습니다. <b>+ 참가자</b>로 만들어 주세요.</p>
+  </div>
+</section>
+
 <section class="admin_panel" id="panel_projects" role="tabpanel">
   <div class="admin_panel_head">
     <h2 class="admin_panel_title">프로젝트</h2>

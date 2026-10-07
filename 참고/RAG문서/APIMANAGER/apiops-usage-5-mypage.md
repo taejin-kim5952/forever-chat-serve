@@ -1,6 +1,7 @@
 ---
 title: MY PAGE 화면
 category: 이용가이드 > MY PAGE
+source_files: [API_Manager_이용가이드_API등록배포절차.pdf]
 url: /v2/apiops/usage-guide/mypage
 updated: 2026-10-06
 ---

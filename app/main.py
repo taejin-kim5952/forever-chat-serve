@@ -14,11 +14,13 @@ from app.api.admin_auth import router as admin_auth_router
 from app.api.brand import logo_url, router as brand_router
 from app.api.chat_stream import router as chat_stream_router
 from app.api.drive import router as drive_router
+from app.api.meeting import router as meeting_router
 from app.api.library import router as library_router
 from app.api.admin_categories import router as admin_categories_router
 from app.api.admin_docs import router as admin_docs_router
 from app.api.admin_jobs import router as admin_jobs_router
 from app.api.admin_pipeline import router as admin_pipeline_router
+from app.api.admin_personas import router as admin_personas_router
 from app.api.admin_projects import router as admin_projects_router
 from app.api.admin_qa import router as admin_qa_router
 from app.api.admin_questions import router as admin_questions_router
@@ -113,6 +115,8 @@ app.include_router(brand_router)
 app.include_router(library_router)
 app.include_router(drive_router)
 app.include_router(chat_stream_router)
+# AI 프로젝트 미팅 — 참가자 목록은 운영에서도 열리고, 회의는 studio 전용입니다.
+app.include_router(meeting_router)
 app.include_router(admin_auth_router)
 app.include_router(admin_qa_router)
 app.include_router(admin_docs_router)
@@ -120,6 +124,7 @@ app.include_router(admin_questions_router)
 app.include_router(admin_settings_router)
 app.include_router(admin_categories_router)
 app.include_router(admin_projects_router)
+app.include_router(admin_personas_router)
 app.include_router(admin_analytics_router)
 app.include_router(admin_pipeline_router)
 app.include_router(admin_jobs_router)

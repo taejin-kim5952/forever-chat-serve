@@ -89,6 +89,8 @@ def isolated_data(tmp_path, monkeypatch):
         "projects_var_dir": str(tmp_path / "projects-var"),
         # 로고 이미지가 실제 `data/brand/` 에 저장되면 테스트가 운영 로고를 덮어쓴다.
         "brand_dir": str(tmp_path / "brand"),
+        # 참가자(AI 프로젝트 미팅)도 설치 단위라 실제 data/ 를 가리킨다.
+        "personas_file": str(tmp_path / "personas.json"),
         "chroma_persist_dir": str(tmp_path / "chroma"),
         "qa_index_file": str(tmp_path / "qa_index.json"),
         "categories_file": str(tmp_path / "categories.json"),

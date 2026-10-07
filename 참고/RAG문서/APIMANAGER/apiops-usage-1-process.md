@@ -1,6 +1,7 @@
 ---
 title: API 등록 · 배포 절차
 category: 이용가이드 > 절차
+source_files: [API_Manager_이용가이드_API등록배포절차.pdf]
 url: /v2/apiops/usage-guide/process
 updated: 2026-10-06
 ---

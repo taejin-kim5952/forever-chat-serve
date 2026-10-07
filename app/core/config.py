@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     # 로고는 그대로여야 하고, 팩을 반입할 때 남의 로고가 함께 따라오면 안 된다.
     brand_dir: str = "./data/brand"
 
+    # AI 프로젝트 미팅의 참가자(기획자·개발자·운영자·PM…). 브랜드 로고와 같은 이유로
+    # 팩이 아니라 설치 단위다 — 역할의 성격은 프로젝트가 달라도 같다.
+    personas_file: str = "./data/personas.json"
+
     # ── 벡터 저장소 ──────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./data/chroma"
     # 사용자 질문이 실제로 부딪치는 인덱스. 검수된 QA의 질문·변형 질문이 들어간다.

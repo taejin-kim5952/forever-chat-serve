@@ -2724,11 +2724,17 @@ $(function(){
 
     $('#docUploadBody').empty();
     $('#docUploadProgress').removeClass('is_shown is_err');
-    $('#docUploadStartBtn').prop('disabled', false).text('등록 시작');
+    $('#docUploadStartBtn').prop('disabled', false).text('등록 시작').data('done', false);
     $('#docUploadTitle').text(isDir ? '폴더 등록' : '파일 등록');
+    /* 본문과 원본을 **나눠서** 셉니다. 묶어서 '문서 6건' 이라고 하면, 원본이 색인되는 줄 알고
+       올린 뒤 결과 표에서 '왜 5건만 등록이지' 가 됩니다(2026-10-07 에 그랬습니다). */
+    var docCount = uploadQueue.filter(function(f){ return DOC_EXT.test(f.name); }).length;
     $('#docUploadSummary').text(
-      '문서 ' + num(uploadQueue.length) + '건을 등록합니다' +
-      (picked.length > files.length ? ' (문서가 아닌 파일 ' + num(picked.length - files.length) + '건은 제외)' : '') +
+      '문서 ' + num(docCount) + '건' +
+      (uploadQueue.length > docCount
+        ? ' · 원본 ' + num(uploadQueue.length - docCount) + '건(보관만 · 색인하지 않습니다)' : '') +
+      '을 등록합니다' +
+      (picked.length > files.length ? ' (올릴 수 없는 파일 ' + num(picked.length - files.length) + '건은 제외)' : '') +
       (uploadPreSkipped.length ? ' · 이름이 겹치는 ' + num(uploadPreSkipped.length) + '건은 건너뜁니다' : '') + '.'
     );
     openModal('docUploadModal');
@@ -2994,6 +3000,10 @@ $(function(){
   });
 
   $('#docUploadStartBtn').on('click', function(){
+    /* 다 끝난 뒤에는 **닫는 버튼**이 됩니다. 전에는 '완료' 글자만 남기고 비활성으로 두었는데,
+       버튼처럼 생겼는데 안 눌리는 것은 오류보다 나쁩니다 — 눌러 보고 기다리게 됩니다
+       (2026-10-07). */
+    if($(this).data('done')){ closeModal($('#docUploadModal')); return; }
     if(uploadBusy || !uploadQueue.length) return;
     uploadBusy = true;
     $('#docUploadStartBtn').prop('disabled', true).text('등록 중…');
@@ -3039,9 +3049,12 @@ $(function(){
     function finish(){
       uploadBusy = false;
       progress($('#docUploadProgress'), { pct:100, text:'완료', error:counts.failed > 0 });
-      $('#docUploadStartBtn').prop('disabled', true).text('완료');
+      $('#docUploadStartBtn').prop('disabled', false).text('완료').data('done', true);
       $('#docUploadSummary').text(
         '등록 ' + num(counts.created) + ' · 갱신 ' + num(counts.updated) +
+        /* 원본(pdf·ppt…)은 색인하지 않으므로 '등록' 과 따로 셉니다. 0 건이면 적지 않습니다 —
+           원본을 쓰지 않는 설치에 쓸데없는 숫자를 보이지 않습니다. */
+        (counts.attached ? ' · 원본 ' + num(counts.attached) : '') +
         ' · 건너뜀 ' + num(counts.skipped) + ' · 실패 ' + num(counts.failed) + '건.' +
         (counts.skipped ? ' 건너뛴 파일은 비고를 확인해 주세요.' : '')
       );

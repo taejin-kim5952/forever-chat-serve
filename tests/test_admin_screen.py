@@ -80,6 +80,26 @@ def test_screens_load_assets_locally_and_absolutely():
             assert asset.startswith("/static/"), f"{name}: 상대경로 자원이 있습니다: {asset}"
 
 
+def test_the_original_file_cell_is_not_swallowed_by_the_row_click():
+    """원본 칸의 동작이 **줄 클릭에 먹히면 안 된다.**
+
+    문서 표는 줄을 누르면 본문 편집기가 열린다. 원본 칸에는 내려받기와 지우기가 들어
+    있는데, 거기까지 번지면 PDF 를 받으려다 편집 모달이 뜬다 — 2026-10-07 에 그랬다.
+    누른 사람은 자기가 뭘 잘못 눌렀는지 알 수 없다.
+
+    버튼마다 `stopPropagation` 을 붙이는 대신 **칸 전체**를 거른다. 버튼을 하나 더 넣을
+    때 또 빠뜨리지 않기 위해서다(실제로 '바꾸기' 를 더했다).
+    """
+    source = ADMIN_JS.read_text(encoding="utf-8")
+    start = source.index("$('#docBody').on('click', 'tr'")
+    block = source[start:source.index("openDocModal($(this)", start)]
+
+    assert "admin_doc_file" in block, (
+        "줄 클릭 처리기가 원본 칸을 거르지 않습니다 — 내려받기·지우기가 편집 모달에 "
+        "먹힙니다"
+    )
+
+
 def test_logging_in_loads_the_project_before_anything_else():
     """로그인 직후에도 **프로젝트를 먼저** 받아야 한다.
 

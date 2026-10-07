@@ -1323,10 +1323,14 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
   /* 지우기는 **줄 안에서 가장 약하게** 둡니다. 눈에 띄는 자리에 두면 문서를 지우려다
      원본을 지웁니다 — 둘은 되돌리는 방법이 다릅니다(본문은 다시 쓸 수 있고, 원본은
      파일이 있어야 합니다). */
-  .admin_doc_file_del{
-    flex:none;width:18px;height:18px;line-height:1;padding:0;
+  .admin_doc_file_act{
+    flex:none;height:18px;line-height:1;padding:0 6px;
     border:0;border-radius:5px;background:none;color:var(--qr-mute);
-    font-size:11px;cursor:pointer;opacity:.55;transition:opacity .15s,background .15s,color .15s;
+    font-size:11px;cursor:pointer;opacity:.6;transition:opacity .15s,background .15s,color .15s;
   }
-  .admin_doc_file_del:hover{opacity:1;background:var(--ad-soft);color:var(--qr-danger);}
+  .admin_doc_file_act:hover{opacity:1;background:var(--ad-soft);color:var(--qr-teal);}
+  /* 지우기만 빨강으로 물듭니다. 바꾸기는 되돌릴 수 있고(옛 파일을 다시 올리면 됩니다)
+     지우기는 파일이 있어야 되돌아옵니다. */
+  .admin_doc_file_act.is_del{width:18px;padding:0;}
+  .admin_doc_file_act.is_del:hover{color:var(--qr-danger);}
   .qr_muted{color:var(--qr-mute);}

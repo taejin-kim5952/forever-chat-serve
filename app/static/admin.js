@@ -2516,7 +2516,9 @@ $(function(){
       (PROJECT ? '&project=' + encodeURIComponent(PROJECT) : '');
     return '<span class="admin_doc_file" title="' + esc(d.file_name) + ' 내려받기">' +
       '<a class="admin_doc_file_name" href="' + href + '" download>' + label + '</a>' +
-      (studio ? '<button type="button" class="admin_doc_file_del" data-doc-file="' +
+      (studio ? '<button type="button" class="admin_doc_file_act" data-doc-swap="' +
+        esc(d.file_name) + '" title="새 파일로 바꿉니다">바꾸기</button>' +
+        '<button type="button" class="admin_doc_file_act is_del" data-doc-file="' +
         esc(d.file_name) + '" aria-label="원본 지우기" title="원본 지우기">✕</button>' : '') +
       '</span>';
   }
@@ -2537,6 +2539,34 @@ $(function(){
           })
           .fail(function(xhr){ toast(apiError(xhr, '지우지 못했습니다'), 'err'); });
       });
+  });
+
+  /* 원본 바꾸기. 파일 고르기를 열고 **덮어쓰기를 켠 채로** 등록으로 보냅니다.
+
+     전에는 `파일 등록` → 같은 이름으로 고르기 → 덮어쓰기 체크 세 단계를 알아야 했습니다.
+     셋 다 해보기 전에는 알 수 없어서 사실상 길이 없는 것과 같았습니다(2026-10-07).
+
+     **이름이 다르면 바꾸는 것이 아니라 하나 더 생깁니다.** 그래서 고른 뒤에 이름을 보고,
+     다르면 그 자리에서 알려 줍니다 — 등록이 끝난 뒤 목록에서 발견하면 되돌리기 번거롭습니다. */
+  var swapTarget = '';
+
+  $('#docBody').on('click', '[data-doc-swap]', function(e){
+    e.stopPropagation();
+    swapTarget = $(this).data('docSwap');
+    $('#docSwapInput').val('').trigger('click');
+  });
+
+  $('#docSwapInput').on('change', function(){
+    var file = (this.files || [])[0];
+    if(!file) return;
+    if(file.name !== swapTarget){
+      askConfirm('파일 이름이 다릅니다',
+        '고른 파일은 ' + file.name + ' 이고 지금 원본은 ' + swapTarget + ' 입니다. ' +
+        '이대로 올리면 바뀌는 것이 아니라 원본이 하나 더 생깁니다. 계속할까요?',
+        true, function(){ pickUploads([file], 'file', true); });
+      return;
+    }
+    pickUploads([file], 'file', true);
   });
 
   function renderDocs(){
@@ -2616,6 +2646,12 @@ $(function(){
   $('#docBody').on('click', 'tr', function(e){
     /* 체크박스를 누른 것은 '고른다'이지 '연다'가 아닙니다(QA 표와 같은 규칙). */
     if($(e.target).is('input[type=checkbox]')) return;
+    /* **원본 칸은 그 자체가 동작입니다** — 내려받기와 지우기. 줄 클릭(본문 편집기 열기)까지
+       번지면 PDF 를 받으려다 편집 모달이 뜹니다(2026-10-07 에 그랬습니다).
+
+       칸 전체를 거릅니다. 버튼마다 `stopPropagation` 을 붙이면 나중에 버튼을 하나 더
+       넣을 때 또 빠뜨립니다. */
+    if($(e.target).closest('.admin_doc_file').length) return;
     openDocModal($(this).data('doc-id'));
   });
   function openDocModal(id){
@@ -2745,7 +2781,7 @@ $(function(){
   $('#docUploadInput').on('change', function(){ pickUploads(this.files, 'dir'); });
   $('#docFileInput').on('change', function(){ pickUploads(this.files, 'file'); });
 
-  function pickUploads(fileList, source){
+  function pickUploads(fileList, source, overwrite){
     var isDir = source === 'dir';
     var picked = Array.prototype.slice.call(fileList || []);
     if(!picked.length) return;
@@ -2791,6 +2827,9 @@ $(function(){
       (picked.length > files.length ? ' (올릴 수 없는 파일 ' + num(picked.length - files.length) + '건은 제외)' : '') +
       (uploadPreSkipped.length ? ' · 이름이 겹치는 ' + num(uploadPreSkipped.length) + '건은 건너뜁니다' : '') + '.'
     );
+    /* 바꾸기로 들어온 길은 덮어쓰기가 켜져 있어야 합니다 — 꺼져 있으면 '같은 이름의 원본이
+       이미 있습니다' 로 건너뛰고, 누른 사람은 아무 일도 안 일어난 것으로 봅니다. */
+    $('#docUploadOverwrite').prop('checked', !!overwrite);
     openModal('docUploadModal');
   }
 

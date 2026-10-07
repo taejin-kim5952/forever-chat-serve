@@ -80,6 +80,45 @@ def test_screens_load_assets_locally_and_absolutely():
             assert asset.startswith("/static/"), f"{name}: 상대경로 자원이 있습니다: {asset}"
 
 
+def test_the_logo_link_is_not_underlined(client):
+    """로고를 **안 올린 설치**에서 로고 자리가 파란 밑줄 링크가 되면 안 된다.
+
+    서버는 로고를 올린 설치에서만 그 자리를 `<img>` 로 갈아 끼운다(`app/main.py` 의
+    `_apply_logo`). 안 올렸으면 글자가 그대로 남는데, `<a class="logo">` 에
+    `text-decoration` 지정이 없으면 브라우저 기본값이 그대로 나온다.
+
+    **개발 PC 에서는 영영 안 보이는 종류다.** 거기에는 `data/brand/logo.svg` 가 있어서
+    늘 `<img>` 가 들어가고, 이미지에는 밑줄이 안 그려진다. 2026-10-07 에 개발 서버에
+    처음 올리고서야 드러났다 — 기본값이 어떻게 보이는지는 **기본값으로 쓰는 곳**에서만
+    알 수 있다.
+    """
+    for name in ["drive.css", "folder-new.css"]:
+        css = (STATIC / name).read_text(encoding="utf-8")
+        rule = next((line for line in css.splitlines()
+                     if line.strip().startswith(".logo{")), None)
+        assert rule, f"{name}: `.logo` 규칙이 없습니다"
+        assert "text-decoration:none" in rule, (
+            f"{name}: `.logo` 에 text-decoration:none 이 없습니다 — 로고를 안 올린 "
+            f"설치에서 파란 밑줄 링크가 됩니다: {rule.strip()}"
+        )
+
+
+def test_the_product_name_sits_outside_the_logo_slot():
+    """제품 이름은 `data-brand-logo` **바깥**이어야 한다.
+
+    서버가 그 요소의 **내용을 통째로** `<img>` 로 갈아 끼우므로, 안에 두면 제품 이름이
+    사라지고 `alt` 에 마크업이 들어간다(2026-10-06 에 겪음).
+    """
+    for name in ["drive.html", "folder-new.html"]:
+        html = (STATIC / name).read_text(encoding="utf-8")
+        slot = re.search(r"<span[^>]*data-brand-logo[^>]*>(.*?)</span>", html, re.DOTALL)
+        assert slot, f"{name}: 로고 자리를 찾지 못했습니다"
+        assert "<" not in slot.group(1), (
+            f"{name}: 로고 자리 안에 다른 요소가 있습니다 — 갈아 끼울 때 사라집니다: "
+            f"{slot.group(1)[:60]}"
+        )
+
+
 def test_admin_page_is_served_with_server_mode(client):
     body = client.get("/admin").text
 

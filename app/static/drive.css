@@ -208,7 +208,11 @@
   /* ---------- 로고 자리 ---------- */
   /* 서버가 `data-brand-logo` 안의 내용을 <img> 로 갈아 끼웁니다(app/main.py).
      로고를 안 올린 설치에서는 글자 배지가 그대로 남습니다 — 빈 자리보다 낫습니다. */
-  .logo{display:flex;align-items:center;gap:9px;min-width:0}
+  /* `text-decoration:none` 이 핵심입니다. 로고를 올린 설치는 내용이 <img> 라 밑줄이
+     안 보이고, **글자로 떨어지는 설치에서만** 파란 밑줄 링크가 됩니다 — 개발 서버에
+     처음 올린 날 그렇게 드러났습니다(2026-10-07). 기본값이 어떻게 보이는지는 기본값으로
+     쓰는 곳에서만 알 수 있습니다. */
+  .logo{display:flex;align-items:center;gap:9px;min-width:0;text-decoration:none;color:inherit}
   .logo_badge{display:inline-flex;align-items:center;min-height:34px;flex:none}
   .logo_name{font-weight:700;font-size:15px;color:var(--ink);letter-spacing:-.02em;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .logo_badge img{height:30px;width:auto;display:block}

@@ -62,7 +62,9 @@
    산출물은 '새 폴더 만들기' 였고, 이 화면은 '새 프로젝트 만들기' 입니다.
    ════════════════════════════════════════════════════════════════════════════ */
 
-  .logo{display:flex;align-items:center;gap:9px;min-width:0}
+  /* `text-decoration:none` 은 drive.css 와 같은 이유입니다 — 로고를 안 올린 설치에서만
+     파란 밑줄 링크로 드러납니다(2026-10-07). */
+  .logo{display:flex;align-items:center;gap:9px;min-width:0;text-decoration:none;color:inherit}
   .logo_badge{display:inline-flex;align-items:center;min-height:34px;flex:none}
   .logo_name{font-weight:700;font-size:15px;color:var(--ink);letter-spacing:-.02em;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .logo_badge img{height:30px;width:auto;display:block}

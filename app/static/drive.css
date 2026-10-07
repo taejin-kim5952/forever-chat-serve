@@ -409,3 +409,30 @@
   .modal_body.is_md table{border-collapse:collapse;margin:10px 0;font-size:13.5px;width:100%}
   .modal_body.is_md th,.modal_body.is_md td{border:1px solid var(--line);padding:7px 10px;text-align:left}
   .modal_body.is_md th{background:#F6F8FC;font-weight:700;color:var(--ink)}
+
+  /* ---------- 좌측 `프로젝트` 하위 메뉴 ----------
+     검색 범위가 여기서 정해집니다. 그래서 고른 것이 **늘 보이게** 둡니다 — 범위를 모른 채
+     "왜 안 나오지" 를 하는 것이 이 화면에서 가장 흔한 막힘입니다. */
+  .nav_sub{display:flex;flex-direction:column;gap:2px;margin:2px 0 6px;padding-left:12px;
+           border-left:2px solid var(--line)}
+  .nav_sub a{display:flex;align-items:center;justify-content:space-between;gap:8px;
+             padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:500;
+             color:var(--muted);text-decoration:none;transition:background .15s,color .15s}
+  .nav_sub a:hover{background:var(--brand-soft);color:var(--brand-dark)}
+  /* 고른 것은 **채우지 않고 글자만** 진하게 합니다. 상위 메뉴(.nav a.active)가 꽉 찬
+     파랑이라, 하위까지 같이 칠하면 어느 쪽이 지금 자리인지 알 수 없습니다. */
+  .nav_sub a.on{background:var(--brand-soft);color:var(--brand-dark);font-weight:700}
+  .nav_sub a em{font-style:normal;font-size:11.5px;font-weight:600;color:var(--muted);
+                background:var(--line);border-radius:999px;padding:1px 7px}
+  .nav_sub a.on em{background:#fff;color:var(--brand-dark)}
+  .nav_sub_empty{display:block;padding:9px 12px;font-size:12.5px;color:var(--muted)}
+
+  /* 펼침 표시. 접혀 있을 때 아래를 향하고, 펼치면 뒤집습니다. */
+  .nav_caret{margin-left:auto;width:16px;height:16px;transition:transform .15s}
+  .nav a[aria-expanded="true"] .nav_caret{transform:rotate(180deg)}
+
+  /* 좁은 화면에서는 사이드바가 아이콘만 남습니다(common.css). 하위 메뉴는 글자가
+     전부라 그때는 감춥니다 — 폴더 카드로 고를 수 있습니다. */
+  @media (max-width:1000px){
+    .nav_sub,.nav_caret{display:none}
+  }

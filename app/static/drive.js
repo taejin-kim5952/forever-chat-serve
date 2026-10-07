@@ -299,9 +299,10 @@
   function selectProject(id) {
     state.projectId = id;
     state.limit = pageSize();
-    var p = projectOf(id);
-    $('crumb').textContent = p ? '전체 / ' + p.name : '전체';
-    renderFolders(); renderFiles();
+    showScope();
+    renderNavProjects();
+    renderFolders(); renderChips(); renderFiles();
+    renderSuggest();      /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
   }
 
   var prev = $('prev'), next = $('next');
@@ -908,7 +909,19 @@
       panelOpen(true);
       $('aiQ').focus();
     });
-    $('navDrive').addEventListener('click', function (e) { e.preventDefault(); setView('browse'); });
+    $('navDrive').addEventListener('click', function (e) {
+      e.preventDefault();
+      /* 이미 프로젝트 화면이면 접었다 폈다 합니다. 다른 화면에서 누르면 넘어오면서 폅니다. */
+      if (state.view === 'browse') openNavProjects($('navProjects').hidden);
+      else setView('browse');
+    });
+    $('navProjects').addEventListener('click', function (e) {
+      var a = e.target.closest('a[data-np]');
+      if (!a) return;
+      e.preventDefault();
+      if (state.view !== 'browse') setView('browse');
+      selectProject(a.dataset.np || null);
+    });
     $('navLibrary').addEventListener('click', function (e) { e.preventDefault(); setView('library'); });
 
     $('aiMode').addEventListener('change', function (e) {
@@ -953,6 +966,32 @@
 
   var VIEW_TITLE = { search: 'AI 지식 검색', browse: '프로젝트', library: '자료실' };
 
+  /* ---------- 좌측 `프로젝트` 하위 메뉴 ----------
+     폴더 카드와 **같은 것을 두 군데**에서 고를 수 있습니다. 카드는 둘러보는 자리이고,
+     하위 메뉴는 지금 어느 프로젝트에 들어와 있는지를 늘 보이게 하는 자리입니다 —
+     검색 범위가 거기서 정해지므로(`searchProject`), 화면 어딘가에 항상 적혀 있어야
+     합니다. 그래서 고르는 길은 하나(`selectProject`)로 모읍니다. */
+  function renderNavProjects() {
+    var box = $('navProjects');
+    var mine = state.projects.filter(function (p) { return (p.role || 'knowledge') === 'knowledge'; });
+    if (!mine.length) {
+      box.innerHTML = '<span class="nav_sub_empty">아직 프로젝트가 없습니다</span>';
+      return;
+    }
+    var rows = ['<a href="#" data-np="" class="' + (state.projectId ? '' : 'on') + '">전체</a>'];
+    box.innerHTML = rows.concat(mine.map(function (p) {
+      return '<a href="#" data-np="' + esc(p.project_id) + '"' +
+        (p.project_id === state.projectId ? ' class="on"' : '') + '>' +
+        esc(p.name) + '<em>' + p.doc_count + '</em></a>';
+    })).join('');
+  }
+
+  function openNavProjects(open) {
+    $('navProjects').hidden = !open;
+    $('navDrive').setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) renderNavProjects();
+  }
+
   function setView(view) {
     state.view = view;
     var search = view === 'search';
@@ -960,19 +999,36 @@
     $('navAsk').classList.toggle('active', search);
     $('navDrive').classList.toggle('active', view === 'browse');
     $('navLibrary').classList.toggle('active', view === 'library');
-    $('pageTitle').textContent = VIEW_TITLE[view] || VIEW_TITLE.browse;
+    openNavProjects(view === 'browse');
     if (search) {
+      $('pageTitle').textContent = VIEW_TITLE.search;
       $('crumb').textContent = '전체 자료에서 찾습니다';
+      /* 안내 문구도 되돌립니다. 이 화면은 `searchProject()` 가 '' 라 **전체**가 범위인데,
+         프로젝트에 들어갔다 나온 뒤 이름이 남아 있으면 실제 범위와 어긋납니다. */
+      $('aiQ').placeholder = DEFAULT_ASK;
       return;
     }
     /* 고른 것이 이 메뉴의 것이 아니면 놓습니다 — 자료실에서 지식 프로젝트가 골라진 채로
        남아 있으면 목록이 비는데 왜 비었는지 알 수가 없습니다. */
     if (state.projectId && roleOf(state.projectId) !== viewRole()) state.projectId = null;
-    var p = projectOf(state.projectId);
-    $('crumb').textContent = p ? '전체 / ' + p.name
-      : (view === 'library' ? '견적서 양식·템플릿처럼 받아서 쓰는 문서' : '전체');
     state.limit = pageSize();
+    showScope();
     renderFolders(); renderChips(); renderFiles();
+  }
+
+  /* 지금 어디를 보고 있는지. 제목에 **프로젝트 이름**을 올립니다 — 검색 범위가 여기서
+     정해지므로, 'API Manager 안에서 찾고 있다' 가 한눈에 보여야 합니다. */
+  var DEFAULT_ASK = $('aiQ').placeholder;
+
+  function showScope() {
+    var p = projectOf(state.projectId);
+    var menu = VIEW_TITLE[state.view] || VIEW_TITLE.browse;
+    $('pageTitle').textContent = p ? p.name : menu;
+    $('crumb').textContent = p
+      ? menu + ' / 이 프로젝트 안에서 찾습니다'
+      : (state.view === 'library' ? '견적서 양식·템플릿처럼 받아서 쓰는 문서'
+                                  : '프로젝트를 고르면 그 안에서만 찾습니다');
+    $('aiQ').placeholder = p ? p.name + ' 에서 찾습니다. 한 문장으로 물어보세요.' : DEFAULT_ASK;
   }
 
   /* ================= 시작 ================= */

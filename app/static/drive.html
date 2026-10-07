@@ -37,6 +37,7 @@
   <symbol id="ic-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></symbol>
   <symbol id="ic-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
   <symbol id="ic-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+  <symbol id="ic-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
   <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
 </svg>
 
@@ -51,7 +52,10 @@
     </a>
     <nav class="nav">
       <a href="#" class="active" id="navAsk"><svg class="i"><use href="#ic-spark"/></svg><span>AI 지식 검색</span></a>
-      <a href="#" id="navDrive"><svg class="i"><use href="#ic-folder"/></svg><span>프로젝트</span></a>
+      <a href="#" id="navDrive" aria-expanded="false" aria-controls="navProjects"><svg class="i"><use href="#ic-folder"/></svg><span>프로젝트</span><svg class="i nav_caret" aria-hidden="true"><use href="#ic-chevron-down"/></svg></a>
+      <!-- 프로젝트 목록. 화면이 채웁니다(drive.js 의 renderNavProjects). 비어 있을 때도
+           자리를 남겨 두면 '없다' 와 '아직 안 불렀다' 를 구분할 수 없어, 자리까지 감춥니다. -->
+      <div class="nav_sub" id="navProjects" hidden></div>
       <a href="#" id="navLibrary"><svg class="i"><use href="#ic-download"/></svg><span>자료실</span></a>
       <a href="/admin"><svg class="i"><use href="#ic-admin"/></svg><span>관리자 설정</span></a>
     </nav>

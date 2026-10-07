@@ -313,7 +313,9 @@
     renderNavProjects();
     renderFolders(); renderChips(); renderFiles();
     faqOpen(false);     /* 열려 있던 '자주 하는 질문' 목록은 닫습니다 */
-    if (!state.answered) clearPanel();
+    /* 프로젝트를 바꾸면 **앞 답은 지웁니다.** 검색 범위가 달라졌는데 그 답이 남아 있으면
+       새 프로젝트에서 나온 답으로 읽힙니다 — 참고 자료도 앞 프로젝트 것입니다. */
+    clearPanel();
   }
 
   var prev = $('prev'), next = $('next');

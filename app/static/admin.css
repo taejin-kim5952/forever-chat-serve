@@ -1299,3 +1299,12 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
 .admin_bubble .admin_md h3{font-size:14.5px;font-weight:700;color:#203864;margin:11px 0 5px;}
 .admin_bubble .admin_md h4,.admin_bubble .admin_md h5,.admin_bubble .admin_md h6{font-size:13.5px;font-weight:700;color:#6b7685;margin:9px 0 4px;}
 .admin_bubble .admin_md > h1:first-child,.admin_bubble .admin_md > h2:first-child{margin-top:0;padding-top:0;border-top:0;}
+
+  /* ---------- 진행 바가 안 차던 것 (2026-10-07) ----------
+     채우는 칸이 `<span>` 이라 **인라인**입니다. 인라인 요소는 `width`·`height` 를 무시하므로,
+     JS 가 `width: 100%` 를 넣어도 아무것도 그려지지 않습니다 — 회색 트랙만 남습니다.
+     `is_indeterminate` 의 `transform` 도 같은 이유로 듣지 않았습니다.
+
+     산출물 쪽 줄을 고치지 않고 여기서 덮습니다(다음 산출물을 통째로 받을 수 있게).
+     문서 등록·QA 생성·품질 평가의 진행 바가 **전부** 이것 하나였습니다. */
+  .admin_progress_bar{display:block;}

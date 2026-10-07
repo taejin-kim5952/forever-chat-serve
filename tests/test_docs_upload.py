@@ -225,3 +225,23 @@ def test_the_screen_sends_every_original_the_server_accepts():
         f"서버는 받는데 화면이 안 보내는 확장자가 있습니다: {', '.join(missing)} — "
         f"그 파일은 올려도 조용히 사라집니다"
     )
+
+
+def test_the_screen_has_a_korean_label_for_every_upload_status():
+    """서버가 내는 상태를 화면이 **빠짐없이** 알아야 한다.
+
+    빠진 상태는 영어 그대로 화면에 나간다. 2026-10-07 에 PDF 가 `attached` 로 떴는데,
+    올린 사람은 그것이 성공인지 실패인지 알 수 없었다 — 다른 줄은 '등록' 이라고 한글로
+    떠 있어서 더 그랬다.
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "app" / "static" / "admin.js").read_text(
+        encoding="utf-8")
+    block = source[source.index("var DOC_UP_ST = {"):]
+    block = block[:block.index("};")]
+
+    for status in ("created", "updated", "attached", "skipped", "failed"):
+        assert status + ":" in block.replace(" ", ""), (
+            f"화면에 {status} 상태의 한글 이름이 없습니다 — 영어 그대로 나갑니다"
+        )

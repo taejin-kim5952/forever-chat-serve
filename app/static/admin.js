@@ -2655,8 +2655,11 @@ $(function(){
   var DOC_EXT = /\.(md|markdown|txt)$/i;
   var FILE_EXT = /\.(7z|ai|bmp|csv|doc|docx|gif|gz|hwp|hwpx|jpeg|jpg|key|odp|ods|odt|pdf|png|ppt|pptx|psd|rtf|svg|tar|webp|xls|xlsx|zip)$/i;
   var UPLOAD_EXT = new RegExp(DOC_EXT.source + '|' + FILE_EXT.source, 'i');
+  /* 서버가 내는 상태를 **빠짐없이** 적습니다. 빠진 것은 영어 그대로 화면에 나갑니다
+     (2026-10-07 에 PDF 가 `attached` 로 떴습니다 — 사용자는 그것이 성공인지 알 수 없습니다). */
   var DOC_UP_ST = {
     created:['is_done','등록'], updated:['is_applied','갱신'],
+    attached:['is_applied','원본 붙임'],
     skipped:['is_hold','건너뜀'], failed:['is_excluded','실패']
   };
   var uploadQueue = [], uploadPreSkipped = [], uploadBusy = false;

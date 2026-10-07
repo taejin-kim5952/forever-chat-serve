@@ -230,6 +230,9 @@ async def _verified(request: Request, question: str, topic: str,
 
     yield _event("done", {
         "mode": "verified",
+        # 화면이 배지를 고르는 데 쓴다. 이것 없이는 '검수된 답변' 과 '자료만' 과 '접수' 를
+        # 구분할 수 없어, 자료만 찾은 질문에도 '담당자 검수 답변' 이 붙는다(2026-10-07).
+        "result_type": response.result_type,
         "project": project,
         "elapsed_ms": int((time.perf_counter() - started) * 1000),
         "ticket_id": response.ticket_id or "",

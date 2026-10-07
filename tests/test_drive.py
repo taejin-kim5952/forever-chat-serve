@@ -376,3 +376,43 @@ def test_a_file_not_linked_to_the_document_is_refused(client, studio, isolated_d
     send(client, [("내문서.md", MD.format(title="내문서", body=KOREAN).encode())])
 
     assert client.get("/api/drive/내문서/file", params={"name": "남의자료.pptx"}).status_code == 404
+
+
+# ── 화면이 서버보다 더 아는 척하지 않는가 ──────────────────────────────────
+
+
+def test_the_stream_says_what_kind_of_answer_it_was(client, studio, isolated_data):
+    """`done` 이 **무엇으로 답했는지** 알려줘야 한다.
+
+    없으면 화면이 '검수된 답변' 과 '자료만' 과 '접수' 를 구분할 수 없다. 실제로 AI 스위치
+    상태로만 배지를 골라서, 답변이 없어 자료만 보여 준 질문에 초록색 체크와 함께
+    **'담당자 검수 답변'** 이 붙었다(2026-10-07). 본문은 바로 아래에서 "답변이 아직
+    준비되지 않았습니다" 라고 말하고 있었다.
+    """
+    send(client, [("게시절차.md", MD.format(title="게시절차", body=KOREAN).encode())])
+
+    body = client.get("/api/chat/stream", params={"question": KOREAN, "ai": "false"}).text
+
+    assert "event: done" in body
+    assert '"result_type"' in body, "done 이 result_type 을 알려주지 않습니다"
+
+
+def test_the_screen_only_claims_review_for_a_reviewed_answer():
+    """배지와 바닥글이 `result_type` 을 보고 정해져야 한다.
+
+    초록 체크와 '담당자 검수 완료' 는 **사람이 확인했다**는 뜻이다. 자료만 찾아 준 것에
+    붙이면 확인하지 않은 것을 확인했다고 말하게 된다 — 이 제품에서 가장 비싼 거짓말이다.
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "app" / "static" / "drive.js").read_text(
+        encoding="utf-8")
+
+    assert "m.resultType === 'answer'" in source, (
+        "화면이 result_type 을 보지 않고 검수 배지를 붙입니다"
+    )
+    # 바닥글도 같은 기준이어야 한다. **코드 줄 자체**를 본다 — 주석에도 같은 문구가 있어서
+    # 둘레를 뭉뚱그려 보면 주석에 걸려 틀려도 통과한다.
+    assert "m.resultType === 'answer') parts.push('담당자 검수 완료'" in source, (
+        "'담당자 검수 완료' 가 result_type 과 무관하게 붙습니다"
+    )

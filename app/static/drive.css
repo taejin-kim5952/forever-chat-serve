@@ -269,7 +269,12 @@
   .msg{margin-bottom:4px}
 
   .msg_head{display:flex;align-items:center;gap:8px;margin-bottom:7px}
-  .badge_verified,.badge_ai{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:4px 9px;border-radius:20px}
+  .badge_verified,.badge_ai,.badge_docs,.badge_open{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:4px 9px;border-radius:20px}
+  /* 자료·접수는 **중립색**입니다. 초록은 '사람이 확인함' 자리라, 자료만 찾았을 때 쓰면
+     확인하지 않은 것을 확인했다고 말하게 됩니다. */
+  .badge_docs{background:var(--line);color:var(--muted)}
+  .badge_open{background:var(--brand-soft);color:var(--brand)}
+  .badge_docs svg.i,.badge_open svg.i{width:14px;height:14px}
   .badge_verified{background:#E6F4EC;color:#1F8A55}
   .badge_verified svg.i{width:14px;height:14px;stroke-width:2.6}
   .badge_ai{background:var(--brand-soft);color:var(--brand)}

@@ -528,7 +528,9 @@
       think_el: q(el, '.msg_think'), md_el: q(el, '.msg_md'), wait_el: q(el, '.msg_wait')
     };
     el.setAttribute('data-mode', m.mode);
-    show(q(el, m.mode === 'ai' ? '.badge_ai' : '.badge_verified'), true);
+    /* 배지는 **서버가 무엇으로 답했는지**(`result_type`)가 정합니다. 처음에는 AI 스위치
+       상태로만 골라서, 자료만 찾은 질문에도 '담당자 검수 답변' 이 붙었습니다. */
+    showBadge(m);
     if (m.reasoning) { show(m.think_el, true); m.think_el.classList.add('is_streaming'); m.phase = 'thinking'; }
 
     q(el, '.msg_think_toggle').addEventListener('click', function () {
@@ -599,7 +601,10 @@
       if (from) parts.push(from.name);
     }
     if (m.mode === 'ai') { if (m.model) parts.push(m.model); parts.push(sec(elapsed) + '초', '검수 전'); }
-    else parts.push('담당자 검수 완료', sec(elapsed) + '초');
+    /* '담당자 검수 완료' 는 **검수된 답변이 나갔을 때만** 적습니다. 자료만 찾아 준 것에
+       붙이면, 사람이 확인하지 않은 것을 확인했다고 말하는 것이 됩니다. */
+    else if (m.resultType === 'answer') parts.push('담당자 검수 완료', sec(elapsed) + '초');
+    else parts.push(sec(elapsed) + '초');
     if (stopped) parts.push('중단됨');
     fill(foot, { foot: parts.join(' · ') });
     show(foot, true);
@@ -700,6 +705,7 @@
       sources: function (d) { m.sources = d.docs || []; },
       done: function (d) {
         m.logId = d.log_id || ''; m.ticketId = d.ticket_id || '';
+        m.resultType = d.result_type || '';
         /* 어느 프로젝트가 답했는지 서버가 알려 줍니다. 뒤이어 보내는 문의가 **그 팩에**
            쌓여야 담당자가 접수번호로 찾을 수 있습니다 — '전체' 로 물었을 때가 그렇습니다. */
         if (d.project) m.project = d.project;
@@ -712,6 +718,20 @@
       }
     });
   }
+  /* `answer` 일 때만 검수 배지를 붙입니다. AI 가 쓴 것은 검수 전이므로 늘 'AI 정리' 입니다.
+     `result_type` 이 아직 없으면(응답 중) 아무것도 붙이지 않습니다 — 잠깐 떴다 바뀌는 배지는
+     사용자가 먼저 본 쪽을 기억합니다. */
+  function showBadge(m) {
+    var el = m.el;
+    ['.badge_verified', '.badge_docs', '.badge_open', '.badge_ai'].forEach(function (sel) {
+      show(q(el, sel), false);
+    });
+    if (m.mode === 'ai') { show(q(el, '.badge_ai'), true); return; }
+    if (m.resultType === 'answer') show(q(el, '.badge_verified'), true);
+    else if (m.resultType === 'related_docs') show(q(el, '.badge_docs'), true);
+    else if (m.resultType === 'unresolved') show(q(el, '.badge_open'), true);
+  }
+
   function stopTicker() { clearInterval(ticker); ticker = null; }
   function endStream() { state.streaming = false; state.current = null; stream = null; renderSend(); }
   function stop() {

@@ -107,6 +107,28 @@ _SUMMARY_PROMPT = """[회의 주제]
 - {language_rule}"""
 
 
+# 발언이 아니라 **프롬프트를 되읊은 것**임을 알려 주는 조각들. 작은 모델에서 나온다
+# (2026-10-07 로그: PM 발언에 "위 주제에 대해 … 한 번 말하세요" 가 통째로 찍혔다).
+#
+# 짧은 한 조각만 보고 버리지 않는다 — 사람이 "주제에 대해" 라고 쓸 수도 있다. **두 개 이상**
+# 겹칠 때만 되읊은 것으로 본다.
+_ECHO_MARKS = (
+    "위 주제에 대해",
+    "앞사람이 한 말을 되풀이하지 마세요",
+    "자 안쪽으로",
+    "머리말을 붙이지 마세요",
+    "[회의 주제]",
+    "[참고 자료]",
+    "[지금까지 나온 이야기]",
+    "[당신]",
+)
+
+
+def _is_echo(text: str) -> bool:
+    """프롬프트를 그대로 뱉었는가."""
+    return sum(1 for mark in _ECHO_MARKS if mark in text) >= 2
+
+
 def _clip(text: str, limit: int) -> str:
     """길면 자르고 **잘렸다고 적는다.** 조용히 자르면 읽는 사람이 말이 끊긴 이유를 모른다."""
     text = text.strip()
@@ -139,7 +161,7 @@ def _history(turns: list[dict], budget: int) -> str:
 
 
 def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
-        model: str | None = None) -> Iterator[tuple[str, dict]]:
+        model: str | None = None, weak: bool = False) -> Iterator[tuple[str, dict]]:
     """회의를 진행하며 발언이 끝날 때마다 하나씩 내보낸다.
 
     `("turn", {...})` 과 `("summary", {...})` 를 순서대로 돌려준다. 화면이 기다리지 않고
@@ -166,8 +188,17 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
         if name not in llms:
             llms[name] = StudioLlm(model=name)
         return llms[name]
-    source_note = ("아래 발췌는 이 프로젝트의 자료에서 주제로 찾은 것입니다."
-                   if hits else "**이 주제로 찾은 자료가 없습니다.** 아는 것처럼 말하지 마세요.")
+    if not hits:
+        source_note = "**이 주제로 찾은 자료가 없습니다.** 아는 것처럼 말하지 마세요."
+    elif weak:
+        # 자료가 걸리기는 했는데 주제와 멀 때가 가장 위험하다. 발췌가 그럴듯해 보여서
+        # 참가자들이 **그 문서를 요약해 버린다**(2026-10-07 로그: "이름을 바꾼다면" 을
+        # 물었는데 넷 다 포털 기능을 요약했다).
+        source_note = (
+            "아래 발췌는 주제로 찾은 것이지만 **주제를 직접 다루지는 않습니다.** "
+            "배경으로만 쓰고, 발췌 내용을 요약하지 마세요. 주제에 답하세요.")
+    else:
+        source_note = "아래 발췌는 이 프로젝트의 자료에서 주제로 찾은 것입니다."
 
     # 언어 규칙은 **발언 프롬프트 안에** 둔다. `qa_rules()` 의 system 에도 있지만 거기서는
     # 여섯 번째 항목이라 묻힌다 — 실제로 참가자 하나가 영어로 말하기 시작했다(2026-10-07).
@@ -197,6 +228,12 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
             except Exception as exc:          # noqa: BLE001 - 한 사람이 죽어도 회의는 이어진다
                 log_event(logger, "meeting turn failed", persona=persona.persona_id,
                           error=str(exc))
+                text = ""
+            # 프롬프트를 되읊은 것은 **발언이 아니다.** 그대로 두면 회의록에 지시문이
+            # 섞여, 읽는 사람이 어디까지가 말인지 가를 수 없다.
+            if text and _is_echo(text):
+                log_event(logger, "meeting turn echoed the prompt",
+                          persona=persona.persona_id, model=speaker.model)
                 text = ""
             # **서버에서 한 번 더 자른다.** 프롬프트의 부탁을 작은 모델이 지키지 않는다.
             text = _clip(text, MAX_TURN_CHARS)

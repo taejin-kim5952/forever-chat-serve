@@ -1305,8 +1305,16 @@
     mt.stream.addEventListener('opened', function (e) {
       var d = JSON.parse(e.data);
       if (d.sources && d.sources.length) {
-        $('mtSrcs').innerHTML = '<span class="mt_srcs_h">보는 자료</span>' +
-          d.sources.map(function (x) { return '<span class="mt_src">' + esc(x.title) + '</span>'; }).join('');
+        /* 서버가 **문서 단위**로 추려 보냅니다. 한 문서에서 조각이 여럿 걸리는 것이
+           보통인데, 조각마다 한 줄이면 같은 제목이 네 번 뜹니다. */
+        $('mtSrcs').innerHTML =
+          '<span class="mt_srcs_h' + (d.weak ? ' is_none' : '') + '">' +
+          (d.weak ? '주제를 직접 다루는 자료가 없습니다 — 아래는 배경으로만 씁니다'
+                  : '보는 자료') + '</span>' +
+          d.sources.map(function (x) {
+            return '<span class="mt_src">' + esc(x.title) +
+              (x.chunks > 1 ? '<em>' + x.chunks + '절</em>' : '') + '</span>';
+          }).join('');
         $('mtSrcs').hidden = false;
       } else {
         /* 자료가 없으면 **그렇다고 말합니다.** 조용히 넘어가면 지어낸 말을 근거 있는

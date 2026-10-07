@@ -75,6 +75,34 @@ def _sources(topic: str, limit: int) -> list[dict]:
     return [h for h in hits if h["similarity"] >= config.related_docs_floor]
 
 
+def _doc_cards(hits: list[dict]) -> list[dict]:
+    """조각 목록을 **문서 목록**으로 바꾼다. 몇 조각이 걸렸는지는 함께 적는다."""
+    cards: dict[str, dict] = {}
+    for h in hits:
+        doc_id = h["doc_id"]
+        card = cards.get(doc_id)
+        if card is None:
+            cards[doc_id] = {"doc_id": doc_id, "title": h.get("title", doc_id), "chunks": 1}
+        else:
+            card["chunks"] += 1
+    return list(cards.values())
+
+
+# 주제와 자료가 **동떨어졌다**고 볼 선. 이 선을 넘지 못하면 가장 일반적인 문서가 통째로
+# 걸려 있을 뿐이고, 참가자들이 그 문서를 요약해 버린다(2026-10-07 로그).
+#
+# `related_docs_floor`(0.55) 는 '자료 카드를 보여줄 만한가' 의 선이라 더 낮다. 회의는
+# 그보다 높게 본다 — 카드 한 장 보여주는 것과 그것만 보고 토론하는 것은 다르다.
+WEAK_SIMILARITY = 0.70
+
+
+def _is_weak(hits: list[dict]) -> bool:
+    """가장 가까운 조각조차 멀면 '자료가 주제를 받치지 못한다'."""
+    if not hits:
+        return True
+    return max(h.get("similarity", 0.0) for h in hits) < WEAK_SIMILARITY
+
+
 @router.get("/stream")
 async def stream(
     topic: str = Query(..., min_length=2, max_length=300),
@@ -109,14 +137,19 @@ async def stream(
             "project": project,
             "personas": [{"persona_id": p.persona_id, "name": p.name, "title": p.title}
                          for p in chosen],
-            "sources": [{"doc_id": h["doc_id"], "title": h.get("title", h["doc_id"])}
-                        for h in hits],
+            # **문서 단위로 추립니다.** 한 문서에서 조각이 여럿 걸리는 것이 보통인데,
+            # 조각마다 한 줄씩 띄우면 같은 제목이 네 번 뜹니다(2026-10-07 에 그랬습니다).
+            "sources": _doc_cards(hits),
+            # 주제가 자료에 얼마나 닿았는가. 화면이 '자료가 주제를 받치지 못한다'를
+            # 알려 주는 데 씁니다 — 참가자들이 자료를 요약해 버리는 그 상황입니다.
+            "weak": _is_weak(hits),
             "rounds": rounds,
         })
 
         # 제너레이터를 스레드에서 한 칸씩 당긴다. 통째로 돌리면 회의가 다 끝난 뒤에야
         # 첫 발언이 나간다 — 흘려보내는 뜻이 없어진다.
-        turns = meeting_mod.run(topic, chosen, hits, rounds=rounds, model=model or None)
+        turns = meeting_mod.run(topic, chosen, hits, rounds=rounds, model=model or None,
+                                weak=_is_weak(hits))
 
         def _next():
             return next(turns, None)

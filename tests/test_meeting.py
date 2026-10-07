@@ -394,3 +394,128 @@ def test_the_sources_and_history_split_the_budget(client, studio, isolated_data,
 
     # 발췌 몫(45%)을 넘지 않아야 이력과 고정 문구가 들어갈 자리가 남는다.
     assert len(seen["prompt"]) < 10000, "프롬프트가 예산을 넘었습니다"
+
+
+# ── 보는 자료 · 주제와 자료의 거리 · 되읊기 ───────────────────────────────
+
+
+def test_sources_are_listed_by_document_not_by_chunk():
+    """한 문서에서 조각이 여럿 걸리는 것이 보통이다. 조각마다 한 줄이면 **같은 제목이
+    네 번** 뜬다(2026-10-07 로그: 'API Link 포털 소개' ×4)."""
+    from app.api.meeting import _doc_cards
+
+    cards = _doc_cards([
+        {"doc_id": "intro", "title": "소개", "similarity": 0.8},
+        {"doc_id": "intro", "title": "소개", "similarity": 0.7},
+        {"doc_id": "intro", "title": "소개", "similarity": 0.6},
+        {"doc_id": "find", "title": "찾기", "similarity": 0.6},
+    ])
+
+    assert [c["doc_id"] for c in cards] == ["intro", "find"]
+    # 몇 조각이 걸렸는지는 남긴다 — 어느 문서가 더 걸렸는지가 쓸모 있다.
+    assert cards[0]["chunks"] == 3
+
+
+def test_a_topic_the_documents_do_not_cover_is_marked_weak():
+    """자료가 걸리기는 했는데 주제와 멀 때가 **가장 위험하다.**
+
+    발췌가 그럴듯해 보여서 참가자들이 그 문서를 요약해 버린다. 로그에서 "이름을 바꾼다면"
+    을 물었는데 넷 다 포털 기능을 요약한 것이 그 경우다.
+    """
+    from app.api.meeting import _is_weak
+
+    assert _is_weak([]) is True
+    assert _is_weak([{"similarity": 0.62}, {"similarity": 0.58}]) is True
+    assert _is_weak([{"similarity": 0.88}, {"similarity": 0.5}]) is False
+
+
+def test_the_participants_are_told_when_the_sources_are_weak(monkeypatch):
+    """프롬프트에 **요약하지 말라**고 적혀야 한다. 약하다고 표시만 하고 말을 안 바꾸면
+    모델은 그대로 요약한다."""
+    from app.studio import meeting as meeting_mod
+
+    seen = {}
+
+    class Spy:
+        model = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 9000
+
+        def fit(self, text, label=""):
+            seen.setdefault("prompt", text)
+            return text
+
+        def chat(self, prompt, system=None, **kw):
+            return "한 마디."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", Spy)
+    hits = [{"doc_id": "intro", "title": "소개", "section_title": "절",
+             "text": "내용", "similarity": 0.62}]
+
+    list(meeting_mod.run("이름을 바꾼다면", [personas_mod.Persona(persona_id="p", name="기획자")],
+                         hits, weak=True))
+
+    assert "요약하지 마세요" in seen["prompt"]
+
+
+def test_a_turn_that_echoes_the_prompt_is_dropped(monkeypatch):
+    """프롬프트를 되읊은 것은 **발언이 아니다.**
+
+    그대로 두면 회의록에 지시문이 섞여 어디까지가 말인지 가를 수 없다(2026-10-07 로그에서
+    PM 발언에 "위 주제에 대해 … 한 번 말하세요" 가 통째로 찍혔다).
+    """
+    from app.studio import meeting as meeting_mod
+
+    class Parrot:
+        model = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 9000
+
+        def fit(self, text, label=""):
+            return text
+
+        def chat(self, prompt, system=None, **kw):
+            return ('위 주제에 대해 기획자 의 눈으로 한 번 말하세요. '
+                    '앞사람이 한 말을 되풀이하지 마세요. 700자 안쪽으로, 문단 한두 개로 씁니다.')
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", Parrot)
+
+    turns = [p for k, p in meeting_mod.run(
+        "주제", [personas_mod.Persona(persona_id="p", name="기획자")], []) if k == "turn"]
+
+    assert turns[0]["text"] == "", "되읊은 것을 발언으로 남기면 안 됩니다"
+
+
+def test_a_normal_turn_that_mentions_the_topic_is_kept(monkeypatch):
+    """한 조각만 겹쳤다고 버리면 멀쩡한 발언이 사라진다. 사람도 '주제에 대해' 라고 쓴다."""
+    from app.studio import meeting as meeting_mod
+
+    class Normal:
+        model = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 9000
+
+        def fit(self, text, label=""):
+            return text
+
+        def chat(self, prompt, system=None, **kw):
+            return "위 주제에 대해 제 생각은 이름을 바꾸는 편이 낫다는 것입니다."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", Normal)
+
+    turns = [p for k, p in meeting_mod.run(
+        "주제", [personas_mod.Persona(persona_id="p", name="기획자")], []) if k == "turn"]
+
+    assert turns[0]["text"], "멀쩡한 발언이 걸러졌습니다"

@@ -535,7 +535,9 @@
            padding-bottom:12px;border-bottom:1px dashed var(--line)}
   .mt_srcs_h{font-size:11.5px;font-weight:700;color:var(--muted)}
   .mt_srcs_h.is_none{font-weight:500}
-  .mt_src{font-size:11.5px;color:var(--muted);background:var(--line);border-radius:999px;padding:3px 9px}
+  .mt_src{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);
+          background:var(--line);border-radius:999px;padding:3px 9px}
+  .mt_src em{font-style:normal;font-size:10.5px;opacity:.75}
 
   .mt_turns{display:flex;flex-direction:column;gap:16px}
   .mt_turn{display:flex;flex-direction:column;gap:6px}

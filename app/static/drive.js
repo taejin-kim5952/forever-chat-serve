@@ -609,10 +609,11 @@
 
     if (!stopped && m.sources.length) {
       /* 참고 자료 = **AI 가 읽은 본문**. 딱지는 늘 '문서' 입니다 — 원본이 PDF 라고 해서
-         근거가 PDF 인 것이 아닙니다. AI 는 `.md` 만 읽습니다. */
+         근거가 PDF 인 것이 아닙니다. AI 는 `.md` 만 읽습니다 — 딱지를 그대로 'MD' 라고
+         적는 이유입니다. */
       var list = q(m.el, '.msg_refs_list');
       m.sources.forEach(function (d) {
-        var ref = fill(tpl('tpl_ref'), { kind: '문서', title: d.title });
+        var ref = fill(tpl('tpl_ref'), { kind: 'MD', title: d.title });
         ref.setAttribute('data-kind', 'md');
         q(ref, '[data-doc-open]').setAttribute('data-doc-open', d.doc_id);
         list.appendChild(ref);

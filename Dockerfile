@@ -14,6 +14,15 @@
 #
 # 운영이 **폐쇄망**이다. 이미지 하나만 반입하면 되도록 모델(565MB)을 함께 굽는다.
 # 대신 `data/` 는 넣지 않는다 — 검수 결과와 질문 이력이 쌓이는 곳이라 볼륨으로 뺀다.
+#
+# ### 모델을 COPY 하지 않고 **빌드할 때 받는** 이유 ★
+#
+# 모델 565MB 는 저장소에 없다(`.gitignore` 의 `models/`). 그래서 **git 에서 받아 빌드하는
+# 쪽**(Jenkins)에는 그 폴더가 아예 없고, `COPY models/` 는 "not found" 로 멈춘다.
+# 받는 방법은 저장소에 있으니(`scripts/fetch_onnx_model.py`) 빌드 안에서 부른다.
+#
+# **빌드하는 기계가 huggingface.co 에 닿아야 한다.** 폐쇄망에는 소스가 아니라 **빌드한
+# 이미지를** 넣는다(`docker save` → 한 파일). 폐쇄망 안에서 빌드하는 길은 원래 없었다.
 
 # ### 베이스 태그를 고정하는 이유 ★
 #
@@ -48,8 +57,11 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 임베딩 모델. 자주 바뀌지 않으므로 코드보다 먼저 넣는다.
-COPY models/ ./models/
+# 임베딩 모델. 자주 바뀌지 않으므로 코드보다 먼저 받아 레이어를 나눈다 — 코드를 고쳐도
+# 565MB 를 다시 받지 않는다. 그래서 `scripts/` 전체가 아니라 **이 스크립트 하나만** 먼저
+# 넣는다(다른 스크립트를 고쳐도 이 레이어가 살아 있도록).
+COPY scripts/fetch_onnx_model.py ./scripts/
+RUN python scripts/fetch_onnx_model.py --dest /app/models/bge-m3-onnx
 
 COPY app/ ./app/
 COPY scripts/ ./scripts/

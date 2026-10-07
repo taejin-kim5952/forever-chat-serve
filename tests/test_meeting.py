@@ -173,6 +173,11 @@ def test_a_meeting_runs_end_to_end(client, studio, isolated_data, monkeypatch):
         def source_budget_chars(self):
             return 2000
 
+        def fit(self, text, label=""):
+            # 진짜 `StudioLlm` 이 가진 것이다. 가짜가 빠뜨리면 **테스트만 통과하고 운영에서
+            # 터진다** — 2026-10-07 에 그랬다.
+            return text
+
         def chat(self, prompt, system=None, **kw):
             return "한 마디 하겠습니다."
 
@@ -206,6 +211,11 @@ def test_a_meeting_opens_even_with_no_matching_documents(client, studio, isolate
         def source_budget_chars(self):
             return 2000
 
+        def fit(self, text, label=""):
+            # 진짜 `StudioLlm` 이 가진 것이다. 가짜가 빠뜨리면 **테스트만 통과하고 운영에서
+            # 터진다** — 2026-10-07 에 그랬다.
+            return text
+
         def chat(self, prompt, system=None, **kw):
             return "자료가 없어 말하기 어렵습니다."
 
@@ -238,6 +248,11 @@ def test_each_participant_can_use_a_different_model(client, studio, isolated_dat
         def source_budget_chars(self):
             return 2000
 
+        def fit(self, text, label=""):
+            # 진짜 `StudioLlm` 이 가진 것이다. 가짜가 빠뜨리면 **테스트만 통과하고 운영에서
+            # 터진다** — 2026-10-07 에 그랬다.
+            return text
+
         def chat(self, prompt, system=None, **kw):
             used.append(self.model)
             return "한 마디."
@@ -267,6 +282,11 @@ def test_the_turn_says_which_model_spoke(client, studio, isolated_data, monkeypa
         def source_budget_chars(self):
             return 2000
 
+        def fit(self, text, label=""):
+            # 진짜 `StudioLlm` 이 가진 것이다. 가짜가 빠뜨리면 **테스트만 통과하고 운영에서
+            # 터진다** — 2026-10-07 에 그랬다.
+            return text
+
         def chat(self, prompt, system=None, **kw):
             return "한 마디."
 
@@ -286,3 +306,91 @@ def test_the_model_survives_a_save(client, studio, isolated_data):
 
     saved = client.get("/api/admin/personas", headers=AUTH).json()["personas"][0]
     assert saved["model"] == "qwen3.5:4b"
+
+
+# ── 컨텍스트 창을 넘기지 않는가 ───────────────────────────────────────────
+
+
+def test_a_long_turn_is_cut_on_the_server(client, studio, isolated_data, monkeypatch):
+    """700자는 **프롬프트의 부탁**일 뿐이다. 작은 모델은 지키지 않는다.
+
+    실제로 2,000자가 넘는 발언이 나왔다(2026-10-07). 발언이 길면 그만큼 다음 사람의
+    프롬프트가 길어지고, 컨텍스트 창을 넘기면 **오류가 아니라 조용히 잘린다.**
+    """
+    from app.studio import meeting as meeting_mod
+
+    class Chatty:
+        model = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 9968
+
+        def fit(self, text, label=""):
+            return text
+
+        def chat(self, prompt, system=None, **kw):
+            return "가" * 4000
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", Chatty)
+    save(client, [{"name": "기획자"}])
+    ids = [p.persona_id for p in personas_mod.enabled()]
+
+    turns = [p for k, p in meeting_mod.run("주제", personas_mod.pick(ids), [], rounds=1)
+             if k == "turn"]
+
+    assert len(turns[0]["text"]) <= meeting_mod.MAX_TURN_CHARS + 20
+    assert "줄였습니다" in turns[0]["text"], "잘랐으면 잘렸다고 적어야 합니다"
+
+
+def test_old_turns_drop_out_when_the_history_gets_long(monkeypatch):
+    """이력이 예산을 넘으면 **오래된 것부터** 뺀다.
+
+    뒤에서부터 채우는 이유: 바로 앞사람의 말을 보는 것이 가장 중요하다. 앞쪽을 남기고 뒤를
+    자르면 "앞사람 말을 되풀이하지 마세요" 가 지켜질 수 없다.
+    """
+    from app.studio.meeting import _history
+
+    turns = [{"name": f"사람{i}", "text": "가" * 300} for i in range(10)]
+
+    text = _history(turns, budget=700)
+
+    assert "사람9" in text, "가장 최근 발언이 남아야 합니다"
+    assert "사람0" not in text
+    assert "줄였습니다" in text, "뺐으면 뺐다고 적어야 합니다"
+
+
+def test_the_sources_and_history_split_the_budget(client, studio, isolated_data, monkeypatch):
+    """발췌가 예산을 다 먹으면 이력이 통째로 사라진다. 몫을 미리 나눠 둔다."""
+    from app.studio import meeting as meeting_mod
+
+    seen = {}
+
+    class Spy:
+        model = "fake"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 10000
+
+        def fit(self, text, label=""):
+            seen["prompt"] = text
+            return text
+
+        def chat(self, prompt, system=None, **kw):
+            return "한 마디."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", Spy)
+    hits = [{"doc_id": f"d{i}", "title": f"문서{i}", "section_title": "절",
+             "text": "나" * 3000, "similarity": 0.8} for i in range(8)]
+    save(client, [{"name": "기획자"}])
+
+    list(meeting_mod.run("주제", personas_mod.pick(
+        [p.persona_id for p in personas_mod.enabled()]), hits, rounds=1))
+
+    # 발췌 몫(45%)을 넘지 않아야 이력과 고정 문구가 들어갈 자리가 남는다.
+    assert len(seen["prompt"]) < 10000, "프롬프트가 예산을 넘었습니다"

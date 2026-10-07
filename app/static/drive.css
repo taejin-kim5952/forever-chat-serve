@@ -476,16 +476,26 @@
   .reffile:hover .reffile_ic{color:var(--brand)}
 
   /* ---------- 자주 하는 질문 (2026-10-07) ----------
-     입력칸 **위**에 둡니다. 답변 패널 안에도 같은 목록이 있지만 그쪽은 패널을 열어야
-     보이고, 처음 들어온 사람은 빈 입력칸부터 봅니다. */
-  .ai-faq{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
-  .ai-faq_head{flex:none;font-size:12px;font-weight:700;color:var(--muted)}
-  .ai-faq_list{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
-  .ai-faq_item{
-    max-width:100%;padding:5px 11px;border-radius:999px;
-    border:1px solid var(--line);background:#fff;color:var(--ink);
-    font-size:12.5px;line-height:1.3;cursor:pointer;text-align:left;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    transition:border-color .15s,background .15s,color .15s;
+     입력칸을 누르면 **아래로 펼칩니다.** 늘 보이게 두면 검색창보다 먼저 눈에 들어와
+     자리를 다툽니다.
+
+     `.ai-row` 를 기준으로 띄웁니다 — 입력칸 바로 아래에 붙어야 '이 칸의 목록' 으로
+     읽힙니다. 카드 밖으로 넘치므로 `z-index` 가 필요합니다. */
+  .ai-row{position:relative}
+  .ai-faq{
+    position:absolute;top:calc(100% - 8px);left:16px;right:16px;z-index:30;
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 12px 28px rgba(16,24,40,.12);
+    padding:6px;max-height:300px;overflow-y:auto;
   }
-  .ai-faq_item:hover{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-dark)}
+  .ai-faq_head{
+    padding:6px 10px 4px;font-size:11.5px;font-weight:700;color:var(--muted);
+  }
+  .ai-faq_item{
+    display:block;width:100%;padding:9px 10px;border:0;border-radius:8px;
+    background:none;color:var(--ink);font-size:13.5px;line-height:1.4;
+    cursor:pointer;text-align:left;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:background .12s,color .12s;
+  }
+  .ai-faq_item:hover{background:var(--brand-soft);color:var(--brand-dark)}

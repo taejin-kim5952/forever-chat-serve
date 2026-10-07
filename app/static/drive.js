@@ -307,7 +307,7 @@
     showScope();
     renderNavProjects();
     renderFolders(); renderChips(); renderFiles();
-    renderSuggest(); renderFaq();   /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
+    renderSuggest(); faqOpen(false);   /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
   }
 
   var prev = $('prev'), next = $('next');
@@ -505,20 +505,31 @@
 
   /* 입력칸 위의 '자주 하는 질문'. 답변 패널 안의 추천 질문과 **같은 목록**을 씁니다
      (`renderSuggest`). 다른 목록을 쓰면 같은 화면이 두 가지를 권하게 됩니다. */
+  /* 지금 범위의 추천 질문. **프로젝트·자료실에서만** 쓰입니다(아래 `faqOpen`). */
+  function faqPool() {
+    var p = projectOf(state.projectId);
+    return (state.view !== 'search' && p) ? (p.questions || []) : [];
+  }
+
   function renderFaq() {
-    var p = projectOf(searchProject());
-    var pool = p ? p.questions : state.projects.reduce(function (a, x) { return a.concat(x.questions); }, []);
     var box = $('aiFaqList');
     box.innerHTML = '';
-    pool.slice(0, 5).forEach(function (text) {
+    faqPool().slice(0, 8).forEach(function (text) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'ai-faq_item';
+      b.setAttribute('role', 'option');
       b.textContent = text;
-      b.addEventListener('click', function () { send(text); });
+      /* `mousedown` 으로 받습니다. `click` 은 입력칸의 `blur` 다음에 와서, 그 사이
+         목록이 닫히면 눌린 자리가 사라집니다. */
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); faqOpen(false); send(text); });
       box.appendChild(b);
     });
-    show($('aiFaq'), !!pool.length);
+  }
+
+  function faqOpen(on) {
+    if (on) renderFaq();
+    show($('aiFaq'), on && !!faqPool().length);
   }
 
   function renderSuggest() {
@@ -984,6 +995,13 @@
     });
     $('navLibrary').addEventListener('click', function (e) { e.preventDefault(); setView('library'); });
 
+    /* 입력칸을 누르면 펼치고, 벗어나면 닫습니다. 글자를 넣기 시작하면 닫습니다 —
+       직접 쓰는 사람에게 목록이 가리고 있을 이유가 없습니다. */
+    $('aiQ').addEventListener('focus', function () { faqOpen(true); });
+    $('aiQ').addEventListener('blur', function () { faqOpen(false); });
+    $('aiQ').addEventListener('input', function () { if (this.value) faqOpen(false); });
+    $('aiQ').addEventListener('keydown', function (e) { if (e.key === 'Escape') faqOpen(false); });
+
     $('aiMode').addEventListener('change', function (e) {
       state.aiOn = e.target.checked; show($('aiHint'), false); renderOpts();
     });
@@ -1060,7 +1078,7 @@
     $('navDrive').classList.toggle('active', view === 'browse');
     $('navLibrary').classList.toggle('active', view === 'library');
     openNavProjects(view === 'browse');
-    renderFaq();        /* 범위가 바뀌면 자주 하는 질문도 그 범위의 것으로 */
+    faqOpen(false);     /* 범위가 바뀌면 열려 있던 목록은 닫습니다 */
     if (search) {
       $('pageTitle').textContent = VIEW_TITLE.search;
       $('crumb').textContent = '전체 자료에서 찾습니다';
@@ -1129,7 +1147,6 @@
       if (wanted && projectOf(wanted)) state.projectId = wanted;
       renderFolders(); renderChips(); renderFiles(); renderOpts();
       setView(wanted && projectOf(wanted) ? 'browse' : 'search');
-      renderFaq();
       /* `enhanceSelect` 는 옵션이 다 들어온 뒤에 한 번만 부릅니다 — 안쪽에서 목록을
          미리 그려 두므로, 나중에 옵션을 넣으면 그 목록이 갱신되지 않습니다. */
       enhanceSelect(pageSizeEl, { variant: 'inline' });

@@ -159,13 +159,6 @@
 
       <!-- AI 질문 — 한 줄로 묻고, 답이 나오면 이 카드 안에서 대화가 된다 -->
       <form class="ai-search" id="aiForm" role="search">
-        <!-- 자주 하는 질문. **관리자 화면의 '질문 카테고리'** 에서 옵니다(화면에 박아 두지
-             않습니다 — 두 곳에 두면 한쪽만 고쳐집니다). 고른 프로젝트가 바뀌면 같이 바뀝니다.
-             등록된 것이 없으면 줄째로 사라집니다 — 빈 제목만 남으면 고장으로 보입니다. -->
-        <div class="ai-faq" id="aiFaq" hidden>
-          <span class="ai-faq_head">자주 하는 질문</span>
-          <span class="ai-faq_list" id="aiFaqList"></span>
-        </div>
         <div class="ai-row">
           <span class="ai-badge"><svg class="i"><use href="#ic-spark"/></svg><span>AI 지식 검색</span></span>
           <!-- **한 번에 하나씩** 묻는 화면입니다. 이어 묻기(`더 자세히`)는 받지 않습니다 —
@@ -175,6 +168,17 @@
           <input id="aiQ" autocomplete="off" aria-label="찾을 내용"
                  placeholder="찾는 내용을 한 문장으로 물어보세요. 예) API 등록 절차를 알려줘">
           <button class="send" id="aiSend" type="submit" aria-label="질문 보내기"><svg class="i"><use href="#ic-send"/></svg></button>
+          <!-- 자주 하는 질문. 입력칸을 누르면 펼칩니다.
+
+               목록은 **관리자 화면의 '질문 카테고리'** 에서 옵니다(app/api/drive.py 의
+               `_questions`). 화면에 박아 두지 않습니다 — 두 곳에 두면 한쪽만 고쳐집니다.
+
+               `AI 지식 검색` 에는 띄우지 않습니다. 거기는 범위가 전체라 모든 프로젝트의
+               질문이 섞여, 고르라고 내놓은 것이 고를 수 없는 목록이 됩니다. -->
+          <div class="ai-faq" id="aiFaq" hidden role="listbox" aria-label="자주 하는 질문">
+            <div class="ai-faq_head">자주 하는 질문</div>
+            <div id="aiFaqList"></div>
+          </div>
         </div>
         <!-- 세 가지 선택. ①이 꺼지면 ②③은 쓸 수 없다 -->
         <div class="ai-opts">

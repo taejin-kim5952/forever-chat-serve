@@ -191,3 +191,37 @@ def test_too_many_files_in_one_request_are_refused(client, auth, studio):
     """묶음 크기는 화면이 지킨다. 서버도 막아야 화면을 거치지 않은 호출에서 타임아웃이 안 난다."""
     response = upload(client, auth, [(f"문서{i}.md", DOC.encode()) for i in range(21)])
     assert response.status_code == 400
+
+
+# ── 화면과 서버가 같은 목록을 보는가 ────────────────────────────────────────
+
+
+def test_the_screen_sends_every_original_the_server_accepts():
+    """화면이 거르는 확장자가 서버 목록보다 좁으면 **파일이 조용히 사라진다.**
+
+    2026-10-07 에 그랬다. 화면이 `.md`·`.markdown`·`.txt` 만 보내서, 문서 작성 요청서대로
+    PDF 를 같은 폴더에 넣어 올렸는데 **PDF 만 서버에 닿지도 못했다.** 등록 결과에는 `.md`
+    5건이 '등록' 으로 떠서 성공한 것처럼 보였고, 원본이 빠진 것은 나중에 다운로드 버튼이
+    없는 것으로만 드러났다.
+
+    서버는 처음부터 받을 준비가 돼 있었다(`doc_upload._attach_original`).
+    """
+    import re
+    from pathlib import Path
+
+    from app.ingestion import doc_files
+
+    source = (Path(__file__).resolve().parents[1] / "app" / "static" / "admin.js").read_text(
+        encoding="utf-8")
+    found = re.search(r"var FILE_EXT = /\\\.\(([^)]+)\)", source)
+    assert found, "admin.js 에서 FILE_EXT 를 찾지 못했습니다"
+
+    # `jpe?g` 처럼 정규식 문법이 섞여 있다. 서버 목록 쪽을 기준으로 **빠진 것**만 본다.
+    screen = found.group(1)
+    missing = [suffix for suffix in sorted(doc_files.ALLOWED_SUFFIXES)
+               if suffix.lstrip(".") not in screen]
+
+    assert not missing, (
+        f"서버는 받는데 화면이 안 보내는 확장자가 있습니다: {', '.join(missing)} — "
+        f"그 파일은 올려도 조용히 사라집니다"
+    )

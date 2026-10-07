@@ -2646,7 +2646,15 @@ $(function(){
      걸린 뒤 무엇이 들어갔는지 알 수 없게 됩니다. 몇 건씩 나눠 보내고 결과를 이어 붙입니다.
      --------------------------------------------------------------------------- */
   var UPLOAD_BATCH = 4;                        /* 서버 상한(20)보다 작게 — 요청이 짧아야 진행률이 촘촘합니다 */
-  var UPLOAD_EXT = /\.(md|markdown|txt)$/i;
+  /* 올릴 수 있는 것 두 가지. **본문**(`.md`)은 색인되고, **원본**은 보관만 됩니다
+     (`app/ingestion/doc_files.py` 의 `KIND_SUFFIXES` 와 같은 목록이어야 합니다).
+
+     원본을 같이 보내는 이유: 폴더에 발표자료와 본문을 함께 두고 한 번에 올리는 것이
+     문서 작성 요청서가 안내하는 방식입니다. 화면이 걸러 버리면 요청서대로 했는데
+     **PDF 만 조용히 사라집니다**(2026-10-07 에 그랬습니다). */
+  var DOC_EXT = /\.(md|markdown|txt)$/i;
+  var FILE_EXT = /\.(7z|ai|bmp|csv|doc|docx|gif|gz|hwp|hwpx|jpeg|jpg|key|odp|ods|odt|pdf|png|ppt|pptx|psd|rtf|svg|tar|webp|xls|xlsx|zip)$/i;
+  var UPLOAD_EXT = new RegExp(DOC_EXT.source + '|' + FILE_EXT.source, 'i');
   var DOC_UP_ST = {
     created:['is_done','등록'], updated:['is_applied','갱신'],
     skipped:['is_hold','건너뜀'], failed:['is_excluded','실패']
@@ -2692,7 +2700,7 @@ $(function(){
        바꿔 고르면 그대로 들어옵니다. */
     var files = picked.filter(function(f){ return UPLOAD_EXT.test(f.name); });
     if(!files.length){
-      toast((isDir ? '폴더에 ' : '') + '문서 파일(.md · .markdown · .txt)이 없습니다', 'err');
+      toast((isDir ? '폴더에 ' : '') + '올릴 수 있는 파일이 없습니다 — 본문(.md)이나 원본(pdf · ppt · xls · hwp …)', 'err');
       return;
     }
 

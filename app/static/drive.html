@@ -159,6 +159,13 @@
 
       <!-- AI 질문 — 한 줄로 묻고, 답이 나오면 이 카드 안에서 대화가 된다 -->
       <form class="ai-search" id="aiForm" role="search">
+        <!-- 자주 하는 질문. **관리자 화면의 '질문 카테고리'** 에서 옵니다(화면에 박아 두지
+             않습니다 — 두 곳에 두면 한쪽만 고쳐집니다). 고른 프로젝트가 바뀌면 같이 바뀝니다.
+             등록된 것이 없으면 줄째로 사라집니다 — 빈 제목만 남으면 고장으로 보입니다. -->
+        <div class="ai-faq" id="aiFaq" hidden>
+          <span class="ai-faq_head">자주 하는 질문</span>
+          <span class="ai-faq_list" id="aiFaqList"></span>
+        </div>
         <div class="ai-row">
           <span class="ai-badge"><svg class="i"><use href="#ic-spark"/></svg><span>AI 지식 검색</span></span>
           <!-- **한 번에 하나씩** 묻는 화면입니다. 이어 묻기(`더 자세히`)는 받지 않습니다 —
@@ -313,8 +320,15 @@
     <div class="ans-loading msg_wait"><i></i><i></i><i></i><span data-bind="wait"></span></div>
     <div class="msg_md"></div>
     <div class="msg_refs" hidden>
+      <!-- AI 가 읽은 것은 본문(.md)뿐입니다. 원본은 아래 따로 둡니다 — 한 칩이 '보기' 와
+           '받기' 를 겸하면 근거가 PDF 인 것처럼 보입니다(2026-10-07). -->
       <div class="msg_refs_head"><svg class="i"><use href="#ic-folder"/></svg>참고 자료</div>
       <div class="ans-refs msg_refs_list"></div>
+    </div>
+    <div class="msg_files" hidden>
+      <!-- 내려받는 것. 여러 본문이 같은 원본을 가리키면 **한 번만** 나옵니다. -->
+      <div class="msg_refs_head"><svg class="i"><use href="#ic-download"/></svg>원본 파일</div>
+      <div class="ans-refs msg_files_list"></div>
     </div>
     <p class="ans-note msg_note" hidden>AI가 정리한 답변입니다. 검수 전이므로 참고 자료 원문을 함께 확인하세요.</p>
     <div class="msg_ask" hidden>
@@ -346,12 +360,23 @@
 </template>
 
 <template id="tpl_ref">
+  <!-- 본문 하나. **누르면 원문이 열립니다.** 내려받기는 여기 없습니다 — 받는 것은 원본이고
+       그쪽은 `tpl_file` 입니다. -->
   <span class="ref">
     <button type="button" class="ref_open" data-doc-open>
       <span class="ref_kind" data-bind="kind"></span><span class="ref_title" data-bind="title"></span>
     </button>
-    <a class="ref_dl" data-doc-download download aria-label="내려받기"><svg class="i"><use href="#ic-download"/></svg></a>
   </span>
+</template>
+
+<template id="tpl_file">
+  <!-- 원본 하나. 받기만 합니다. -->
+  <a class="reffile" data-file-download download>
+    <span class="reffile_kind" data-bind="kind"></span>
+    <span class="reffile_name" data-bind="name"></span>
+    <span class="reffile_size" data-bind="size"></span>
+    <svg class="i reffile_ic"><use href="#ic-download"/></svg>
+  </a>
 </template>
 
 <template id="tpl_suggest">

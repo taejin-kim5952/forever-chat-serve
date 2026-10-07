@@ -85,9 +85,14 @@
   function docOf(id) {
     return state.docs.filter(function (d) { return d.doc_id === id; })[0] || null;
   }
+  /* `name` 을 주면 그 원본을, 안 주면 대표 원본(없으면 `.md` 원문)을 받습니다.
+     서버는 **그 문서에 묶인 원본 중에서만** 고르게 합니다(`find_named`). */
   function fileUrl(doc) {
+    var qs = [];
+    if (doc.project) qs.push('project=' + encodeURIComponent(doc.project));
+    if (doc.name) qs.push('name=' + encodeURIComponent(doc.name));
     return '/api/drive/' + encodeURIComponent(doc.doc_id) + '/file' +
-      (doc.project ? '?project=' + encodeURIComponent(doc.project) : '');
+      (qs.length ? '?' + qs.join('&') : '');
   }
   function modelName() {
     if (state.model) return state.model;
@@ -302,7 +307,7 @@
     showScope();
     renderNavProjects();
     renderFolders(); renderChips(); renderFiles();
-    renderSuggest();      /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
+    renderSuggest(); renderFaq();   /* 추천 질문도 그 프로젝트 것으로 바뀝니다 */
   }
 
   var prev = $('prev'), next = $('next');
@@ -498,6 +503,24 @@
     state.stick = ansBody.scrollHeight - ansBody.scrollTop - ansBody.clientHeight < 48;
   });
 
+  /* 입력칸 위의 '자주 하는 질문'. 답변 패널 안의 추천 질문과 **같은 목록**을 씁니다
+     (`renderSuggest`). 다른 목록을 쓰면 같은 화면이 두 가지를 권하게 됩니다. */
+  function renderFaq() {
+    var p = projectOf(searchProject());
+    var pool = p ? p.questions : state.projects.reduce(function (a, x) { return a.concat(x.questions); }, []);
+    var box = $('aiFaqList');
+    box.innerHTML = '';
+    pool.slice(0, 5).forEach(function (text) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ai-faq_item';
+      b.textContent = text;
+      b.addEventListener('click', function () { send(text); });
+      box.appendChild(b);
+    });
+    show($('aiFaq'), !!pool.length);
+  }
+
   function renderSuggest() {
     /* 검색 화면은 전체 범위라 모든 프로젝트의 추천 질문을 섞습니다. */
     var p = projectOf(searchProject());
@@ -574,17 +597,34 @@
     m.md_el.innerHTML = md(m.answer);
 
     if (!stopped && m.sources.length) {
+      /* 참고 자료 = **AI 가 읽은 본문**. 딱지는 늘 '문서' 입니다 — 원본이 PDF 라고 해서
+         근거가 PDF 인 것이 아닙니다. AI 는 `.md` 만 읽습니다. */
       var list = q(m.el, '.msg_refs_list');
       m.sources.forEach(function (d) {
-        var ref = fill(tpl('tpl_ref'), { kind: (KINDS[d.file_kind] || KINDS.etc).label, title: d.title });
-        ref.setAttribute('data-kind', d.file_kind || 'md');
+        var ref = fill(tpl('tpl_ref'), { kind: '문서', title: d.title });
+        ref.setAttribute('data-kind', 'md');
         q(ref, '[data-doc-open]').setAttribute('data-doc-open', d.doc_id);
-        var dl = q(ref, '[data-doc-download]');
-        dl.setAttribute('href', fileUrl({ doc_id: d.doc_id, project: d.project }));
-        dl.setAttribute('title', d.file_name + ' 내려받기');
         list.appendChild(ref);
       });
       show(q(m.el, '.msg_refs'), true);
+
+      /* 원본 = **사람이 받는 것**. 본문 여럿이 같은 원본을 가리키는 것이 정상이므로
+         (긴 발표자료를 주제별로 쪼갠 경우) 이름으로 한 번만 추립니다. */
+      var files = q(m.el, '.msg_files_list'), seen = {};
+      m.sources.forEach(function (d) {
+        (d.files || []).forEach(function (f) {
+          if (seen[f.name]) return;
+          seen[f.name] = true;
+          var row = fill(tpl('tpl_file'), {
+            kind: (KINDS[f.kind] || KINDS.etc).label, name: f.name, size: fmtSize(f.bytes)
+          });
+          row.setAttribute('data-kind', f.kind || 'etc');
+          row.setAttribute('href', fileUrl({ doc_id: d.doc_id, project: d.project, name: f.name }));
+          row.setAttribute('title', f.name + ' 내려받기');
+          files.appendChild(row);
+        });
+      });
+      show(q(m.el, '.msg_files'), !!Object.keys(seen).length);
     }
 
     /* 검수 답변에는 'AI가 정리했다' 주의문을 띄우지 않습니다 — 사람이 승인한 문장이라
@@ -1020,6 +1060,7 @@
     $('navDrive').classList.toggle('active', view === 'browse');
     $('navLibrary').classList.toggle('active', view === 'library');
     openNavProjects(view === 'browse');
+    renderFaq();        /* 범위가 바뀌면 자주 하는 질문도 그 범위의 것으로 */
     if (search) {
       $('pageTitle').textContent = VIEW_TITLE.search;
       $('crumb').textContent = '전체 자료에서 찾습니다';
@@ -1088,6 +1129,7 @@
       if (wanted && projectOf(wanted)) state.projectId = wanted;
       renderFolders(); renderChips(); renderFiles(); renderOpts();
       setView(wanted && projectOf(wanted) ? 'browse' : 'search');
+      renderFaq();
       /* `enhanceSelect` 는 옵션이 다 들어온 뒤에 한 번만 부릅니다 — 안쪽에서 목록을
          미리 그려 두므로, 나중에 옵션을 넣으면 그 목록이 갱신되지 않습니다. */
       enhanceSelect(pageSizeEl, { variant: 'inline' });

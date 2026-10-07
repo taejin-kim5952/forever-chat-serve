@@ -445,3 +445,47 @@
   @media (max-width:1000px){
     .nav_sub,.nav_caret{display:none}
   }
+
+  /* ---------- 원본 파일 (2026-10-07) ----------
+     참고 자료와 **생김새를 다르게** 둡니다. 하나는 누르면 열리고 하나는 받아집니다 —
+     같은 모양이면 어느 쪽이 무엇인지 매번 눌러 봐야 압니다. */
+  .reffile{
+    display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 10px;
+    border-radius:8px;background:#fff;border:1px solid var(--line);
+    font-size:13px;color:var(--ink);text-decoration:none;line-height:1;
+    transition:border-color .15s,background .15s;
+  }
+  .reffile:hover{border-color:var(--brand);background:var(--brand-soft)}
+  .reffile_kind{
+    flex:none;font-size:10px;font-weight:800;letter-spacing:.02em;color:#fff;
+    background:var(--muted);border-radius:4px;padding:2px 5px;line-height:1.2;
+  }
+  /* 종류별 색은 참고 자료 칩과 **같은 값**입니다. 같은 PDF 가 두 자리에서 다른 색이면
+     사용자가 다른 것으로 봅니다. */
+  .reffile[data-kind="pdf"] .reffile_kind{background:#E5484D}
+  .reffile[data-kind="ppt"] .reffile_kind{background:#D9622B}
+  .reffile[data-kind="doc"] .reffile_kind{background:#2F6FDB}
+  .reffile[data-kind="xls"] .reffile_kind{background:#1F8A55}
+  .reffile[data-kind="hwp"] .reffile_kind{background:#1A8BB5}
+  .reffile[data-kind="zip"] .reffile_kind{background:#6B7685}
+  .reffile[data-kind="img"] .reffile_kind{background:#7A5BC7}
+  .reffile[data-kind="etc"] .reffile_kind{background:#98A2B3}
+  .reffile_name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+  .reffile_size{flex:none;color:var(--muted);font-size:11.5px}
+  .reffile_ic{flex:none;width:16px;height:16px;color:var(--muted)}
+  .reffile:hover .reffile_ic{color:var(--brand)}
+
+  /* ---------- 자주 하는 질문 (2026-10-07) ----------
+     입력칸 **위**에 둡니다. 답변 패널 안에도 같은 목록이 있지만 그쪽은 패널을 열어야
+     보이고, 처음 들어온 사람은 빈 입력칸부터 봅니다. */
+  .ai-faq{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+  .ai-faq_head{flex:none;font-size:12px;font-weight:700;color:var(--muted)}
+  .ai-faq_list{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+  .ai-faq_item{
+    max-width:100%;padding:5px 11px;border-radius:999px;
+    border:1px solid var(--line);background:#fff;color:var(--ink);
+    font-size:12.5px;line-height:1.3;cursor:pointer;text-align:left;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:border-color .15s,background .15s,color .15s;
+  }
+  .ai-faq_item:hover{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-dark)}

@@ -61,10 +61,9 @@ $(function(){
   var BOTTOM_GAP = 160;   /* 이 거리 이상 떨어졌을 때만 [맨 아래로] 노출 */
 
   /* ---------- 유틸 ---------- */
-  function esc(s){
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  /* 렌더러는 markdown.js 로 합쳤다 - admin.js 의 검수 미리보기와 같은 함수를 써야
+     사용자가 보는 답변과 검수 화면이 어긋나지 않는다. 여기서는 별칭만 둔다. */
+  var esc = ChatMD.esc;
   function tpl(id){ return $($('#'+id).prop('content').cloneNode(true)); }
   function findCategory(id){
     var found = null;
@@ -89,101 +88,14 @@ $(function(){
     if(!show) $toBottom.removeClass('is_new');
   }
 
-  /* ---------- 마크다운 렌더 (번호목록/불릿/굵게/코드/문단) ---------- */
-  function inline(text){
-    return esc(text)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  }
-  function renderMarkdown(src){
-    var blocks = String(src || '').replace(/\r\n/g,'\n').split(/\n{2,}/);
-    var html = '';
-    $.each(blocks, function(_, block){
-      var lines = block.split('\n').filter(function(l){ return l.trim() !== ''; });
-      if(!lines.length) return;
-      if(/^\s*\d+\.\s/.test(lines[0])){
-        html += '<ol>' + lines.map(function(l){
-          return '<li>' + inline(l.replace(/^\s*\d+\.\s/,'')) + '</li>';
-        }).join('') + '</ol>';
-      } else if(/^\s*[-*]\s/.test(lines[0])){
-        html += '<ul>' + lines.map(function(l){
-          return '<li>' + inline(l.replace(/^\s*[-*]\s/,'')) + '</li>';
-        }).join('') + '</ul>';
-      } else {
-        html += '<p>' + lines.map(inline).join('<br>') + '</p>';
-      }
-    });
-    return html;
-  }
-
-  /* ---------- 문서 렌더 (출처 모달 전용) ----------
-     **말풍선용 renderMarkdown() 과 일부러 분리한다.** 답변은 텍스트로만 두기로 했다 —
-     화면 캡처·도식을 답변마다 박으면 제품 UI가 바뀔 때 그 그림을 인용한 답변을 전부 찾아
-     고쳐야 한다. 그림은 원본 문서 한 곳에만 두고 여기서 그린다. 갱신 지점이 하나가 된다.
-
-     그래서 renderMarkdown() 은 손대지 않는다. 그 함수는 `admin.js` 의 검수 미리보기와
-     **글자 하나까지 같아야** 하고(다르면 검수가 의미를 잃는다), 여기는 그 제약이 없다. */
-  var DOC_IMAGE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
-
-  function docImage(line){
-    var m = line.trim().match(DOC_IMAGE);
-    if(!m) return '';
-    /* `img/파일명` 만 받는다. 절대 URL(폐쇄망에서 안 뜬다)과 상위 경로는 그림으로 안 그린다 */
-    var src = m[2];
-    if(src.indexOf('img/') !== 0 || src.indexOf('..') > -1) return '';
-    return '<img class="chat_doc_img" src="' + API.docImage + encodeURIComponent(src.slice(4)) +
-           '" alt="' + esc(m[1]) + '" loading="lazy">';
-  }
-
-  function docTable(lines){
-    /* `|---|---|` 구분선이 둘째 줄에 있어야 표다. 없으면 그냥 문단으로 흘려보낸다. */
-    if(lines.length < 2 || !/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[1])) return '';
-    var cells = function(l){
-      return l.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(function(c){ return $.trim(c); });
-    };
-    var head = '<tr>' + cells(lines[0]).map(function(c){ return '<th>' + inline(c) + '</th>'; }).join('') + '</tr>';
-    var body = lines.slice(2).map(function(l){
-      return '<tr>' + cells(l).map(function(c){ return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>';
-    }).join('');
-    return '<div class="chat_doc_tablewrap"><table class="chat_doc_table">' +
-           '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
-  }
-
-  function renderDoc(src){
-    var blocks = String(src || '').replace(/\r\n/g,'\n').split(/\n{2,}/);
-    var html = '';
-    $.each(blocks, function(_, block){
-      var lines = block.split('\n').filter(function(l){ return l.trim() !== ''; });
-      if(!lines.length) return;
-
-      var img = docImage(lines[0]);
-      if(img){ html += '<figure class="chat_doc_figure">' + img + '</figure>'; return; }
-
-      var heading = lines[0].match(/^(#{1,4})\s+(.*)$/);
-      if(heading){
-        var level = Math.min(heading[1].length + 1, 5);   /* 모달 안이라 한 단계 낮춘다 */
-        html += '<h' + level + ' class="chat_doc_h">' + inline(heading[2]) + '</h' + level + '>';
-        lines = lines.slice(1);
-        if(!lines.length) return;
-      }
-
-      var table = lines[0].indexOf('|') > -1 ? docTable(lines) : '';
-      if(table){ html += table; return; }
-
-      if(/^\s*\d+\.\s/.test(lines[0])){
-        html += '<ol>' + lines.map(function(l){
-          return '<li>' + inline(l.replace(/^\s*\d+\.\s/,'')) + '</li>';
-        }).join('') + '</ol>';
-      } else if(/^\s*[-*|]\s/.test(lines[0])){
-        html += '<ul>' + lines.map(function(l){
-          return '<li>' + inline(l.replace(/^\s*[-*]\s/,'')) + '</li>';
-        }).join('') + '</ul>';
-      } else {
-        html += '<p>' + lines.map(inline).join('<br>') + '</p>';
-      }
-    });
-    return html;
-  }
+  /* ---------- 마크다운 렌더 ----------
+     구현은 markdown.js(ChatMD) 에 있다. 답변 말풍선은 이미지를 그리지 않고(renderAnswer),
+     출처 모달만 이미지를 그린다(renderDoc). 문서 이미지 경로는 화면마다 베이스가 달라
+     아래에서 넣어준다. */
+  ChatMD.configure({ imageBase: API.docImage });
+  var inline = ChatMD.inline;
+  function renderMarkdown(src){ return ChatMD.renderAnswer(src); }
+  function renderDoc(src){ return ChatMD.renderDoc(src); }
 
   /* ---------- 인트로 칩 ---------- */
   /* 주제가 하나도 없는 설치처가 있다 — 그때는 칩·소제목·[전체 주제 보기]·아래 트리거가

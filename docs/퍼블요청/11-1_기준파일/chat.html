@@ -298,6 +298,9 @@
 </template>
 
 <script src="/static/vendor/jquery-3.7.1.min.js"></script>
+<!-- 답변/문서 렌더러 - chat.js 와 admin.js 가 같은 것을 쓴다(검수 화면과 사용자
+     답변이 어긋나면 안 되므로). 반드시 chat.js 보다 먼저 로드한다. -->
+<script src="/static/markdown.js"></script>
 <script src="/static/chat.js"></script>
 </body>
 </html>

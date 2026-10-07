@@ -19,6 +19,7 @@ data/question_log.jsonl
 data/question_embeddings.jsonl
 data/analytics.json
 data/runtime_config.json
+data/job_history.json
 
 # 임베딩 모델(ONNX) — 565MB. 저장소에 넣지 않고 scripts/fetch_onnx_model.py 로 받습니다.
 models/

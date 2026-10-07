@@ -264,6 +264,7 @@ function loadFlow(){
 function loadRuntimeModels(){
   return API.get('/api/admin/mode').done(function(m){
     $('#evalEmbedModel').text(m.embed_model || '—');
+    $('#reindexEmbedModel').text(m.embed_model || '—');
     $('#setQuestionModel').text(m.question_model || '—');
     $('#setAnswerModel').text(m.answer_model || '—');
     /* 채점 모델이 비어 있는 것은 설정 누락이 아니라 '채점 안 함'입니다. */
@@ -771,6 +772,49 @@ $(function(){
     closeModal($('#confirmModal'));
     if(confirmCb){ confirmCb(); confirmCb = null; }
   });
+
+  /* ---------- 재색인 ----------
+     임베딩 모델을 바꾸면 컬렉션을 **여는 것부터** 막혀 챗봇이 500 으로 죽습니다. 그걸 푸는
+     유일한 수단이 이 재색인인데 화면에 없어서 그동안 curl 로 풀어야 했습니다.
+
+     되돌릴 수 없는 작업이라 확인을 한 번 받습니다. 원본(QA·문서 파일)은 그대로 두므로 내용이
+     사라지지는 않지만, 벡터를 전부 다시 만들어 문서 수에 따라 몇 분 걸립니다.
+
+     어느 프로젝트를 다시 색인하는지는 `projectHeaders()` 가 정합니다 — 화면에서 고른 것입니다. */
+  $('#reindexBtn').on('click', function(){
+    var withDocs = $('#reindexWithDocs').is(':checked');
+    askConfirm(
+      withDocs ? 'QA와 문서를 모두 재색인할까요?' : 'QA만 재색인할까요?',
+      '기존 벡터를 지우고 원본에서 다시 만듭니다. 문서 수에 따라 몇 분 걸릴 수 있습니다.',
+      false,
+      function(){ runReindex(withDocs); }
+    );
+  });
+
+  function runReindex(withDocs){
+    var $btn = $('#reindexBtn').prop('disabled', true).text('재색인 중…');
+    $('#reindexWarn').prop('hidden', true);
+    $('#reindexResult').prop('hidden', true);
+
+    API.send('POST', '/api/admin/qa/reindex?include_docs=' + (withDocs ? 'true' : 'false'))
+      .done(function(r){
+        var msg = 'QA ' + (r.items != null ? r.items : '?') + '건 / 벡터 '
+                + (r.vectors != null ? r.vectors : '?') + '개를 다시 색인했습니다.';
+        if(withDocs && r.docs){
+          var chunks = 0;
+          $.each(r.docs, function(_, n){ chunks += (n || 0); });
+          msg += ' 문서 ' + Object.keys(r.docs).length + '개 / 조각 ' + chunks + '개도 함께 처리했습니다.';
+        }
+        $('#reindexResult').text(msg).prop('hidden', false);
+        toast('재색인을 마쳤습니다.');
+        loadRuntimeModels();
+      })
+      .fail(function(xhr){
+        $('#reindexWarn').text(apiError(xhr, '재색인에 실패했습니다.')).prop('hidden', false);
+        toast('재색인에 실패했습니다.', 'err');
+      })
+      .always(function(){ $btn.prop('disabled', false).text('재색인'); });
+  }
 
   /* ============================================================
      카테고리 팝오버 (공용 컴포넌트)

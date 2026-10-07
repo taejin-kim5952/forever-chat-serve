@@ -15,14 +15,26 @@
 # 운영이 **폐쇄망**이다. 이미지 하나만 반입하면 되도록 모델(565MB)을 함께 굽는다.
 # 대신 `data/` 는 넣지 않는다 — 검수 결과와 질문 이력이 쌓이는 곳이라 볼륨으로 뺀다.
 #
-# ### 모델을 COPY 하지 않고 **빌드할 때 받는** 이유 ★
+# ### 모델을 굽는 것은 **선택**이다 — `WITH_MODEL` ★ (2026-10-07)
 #
 # 모델 565MB 는 저장소에 없다(`.gitignore` 의 `models/`). 그래서 **git 에서 받아 빌드하는
-# 쪽**(Jenkins)에는 그 폴더가 아예 없고, `COPY models/` 는 "not found" 로 멈춘다.
-# 받는 방법은 저장소에 있으니(`scripts/fetch_onnx_model.py`) 빌드 안에서 부른다.
+# 쪽**(Jenkins)에는 그 폴더가 아예 없고, 예전의 `COPY models/` 는 "not found" 로 멈췄다.
 #
-# **빌드하는 기계가 huggingface.co 에 닿아야 한다.** 폐쇄망에는 소스가 아니라 **빌드한
-# 이미지를** 넣는다(`docker save` → 한 파일). 폐쇄망 안에서 빌드하는 길은 원래 없었다.
+# 쓰는 곳이 둘이고 요구가 반대라 하나로 정하지 않았다.
+#
+#   개발 서버 (기본 · WITH_MODEL=false)
+#     이미지에 넣지 않는다(2.1GB). 모델은 서버에 **한 번** 받아 두고 볼륨으로 붙인다
+#     (`EMBED_ONNX_DIR`). Jenkins 가 코드만 실어 빌드가 가볍고, 코드를 고쳐도 565MB 가
+#     오가지 않는다. 모델은 거의 바뀌지 않으니 매 빌드에 끼울 이유가 없다.
+#
+#   폐쇄망 납품 (WITH_MODEL=true)
+#     반입물이 **이미지 한 파일**이어야 한다. 볼륨으로 붙이라고 하면 반입 절차가 두
+#     가지가 되고, 그 하나를 빠뜨리면 컨테이너가 뜨고도 모든 질문이 '미해결'이 된다.
+#
+#       docker build --build-arg WITH_MODEL=true -t openapi-chat-serve:latest .
+#
+# 어느 쪽이든 **빌드/받는 기계가 huggingface.co 에 닿아야 한다.** 폐쇄망 안에서 받는 길은
+# 원래 없었다 — 거기 들어가는 것은 소스가 아니라 다 만들어진 이미지다.
 
 # ### 베이스 태그를 고정하는 이유 ★
 #
@@ -53,24 +65,42 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# 비루트 사용자를 **먼저** 만든다. 볼륨으로 붙일 data/ 도 이 사용자가 쓸 수 있어야 한다.
+#
+# ### 뒤에서 `chown -R` 하지 않는 이유 ★ (2026-10-07 실측)
+#
+# 레이어는 파일 단위로 쌓인다. 소유자만 바꿔도 **그 파일이 새 레이어에 통째로 다시 들어간다.**
+# 전에는 맨 뒤에서 `chown -R appuser:appuser /app` 을 했는데, 모델을 구운 이미지에서 그
+# 레이어 하나가 **598MB** 였다(`docker history` 로 확인). 565MB 모델이 두 번 들어 있었다.
+#
+# 그래서 사용자를 먼저 만들고, 넣는 쪽에서 `COPY --chown` 으로 처음부터 맞춰 둔다.
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/data \
+    && chown appuser:appuser /app /app/data
+
 # 의존성을 먼저 넣어 레이어를 나눈다 — 코드를 고쳐도 이 무거운 단계를 다시 하지 않는다.
+# pip 는 /usr/local 에 깔아야 하므로 아직 루트다.
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 임베딩 모델. 자주 바뀌지 않으므로 코드보다 먼저 받아 레이어를 나눈다 — 코드를 고쳐도
-# 565MB 를 다시 받지 않는다. 그래서 `scripts/` 전체가 아니라 **이 스크립트 하나만** 먼저
-# 넣는다(다른 스크립트를 고쳐도 이 레이어가 살아 있도록).
-COPY scripts/fetch_onnx_model.py ./scripts/
-RUN python scripts/fetch_onnx_model.py --dest /app/models/bge-m3-onnx
-
-COPY app/ ./app/
-COPY scripts/ ./scripts/
-
-# 루트로 돌리지 않는다. 볼륨으로 붙일 data/ 도 이 사용자가 쓸 수 있어야 한다.
-RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/data \
-    && chown -R appuser:appuser /app
+# 여기부터 비루트. 모델과 코드가 **만들어질 때부터** appuser 것이 된다.
 USER appuser
+
+# 임베딩 모델. 기본은 **넣지 않는다**(위 WITH_MODEL 참고).
+#
+# 코드보다 먼저 두어 레이어를 나눈다 — 코드를 고쳐도 565MB 를 다시 받지 않는다. 그래서
+# `scripts/` 전체가 아니라 **이 스크립트 하나만** 먼저 넣는다(다른 스크립트를 고쳐도 이
+# 레이어가 살아 있도록).
+ARG WITH_MODEL=false
+COPY --chown=appuser:appuser scripts/fetch_onnx_model.py ./scripts/
+RUN if [ "$WITH_MODEL" = "true" ]; then \
+      python scripts/fetch_onnx_model.py --dest /app/models/bge-m3-onnx; \
+    else \
+      echo "모델을 굽지 않습니다(WITH_MODEL=false). EMBED_ONNX_DIR 로 볼륨을 붙이세요."; \
+    fi
+
+COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
 EXPOSE 18100
 

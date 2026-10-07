@@ -56,3 +56,13 @@ services:
       # 오류는 나지 않습니다. 빈 화면만 남습니다.
       - ./packs:/app/packs
       - ./var:/app/var
+      # ★ **임베딩 모델.** 이미지에 굽지 않았으므로(Dockerfile 의 `WITH_MODEL`) 반드시
+      # 붙여야 합니다. 없으면 컨테이너는 뜨는데 **모든 질문이 '미해결'** 로 떨어집니다
+      # (`/health/ready` 가 `embed_model: missing` 을 냅니다 — 올린 뒤 그것부터 보세요).
+      #
+      # 서버에 **한 번** 받아 두면 끝입니다. 모델은 거의 바뀌지 않으니 매 빌드에 565MB 를
+      # 끼울 이유가 없고, Jenkins 는 코드만 실어 빌드가 가볍습니다. 받는 방법은
+      # docs/11-배포.md 의 '모델을 서버에 한 번 받아 두기'.
+      #
+      # 읽기 전용입니다 — 앱이 여기에 쓸 일이 없고, 지워지면 재색인으로도 복구가 안 됩니다.
+      - ${MODEL_DIR:-./models}/bge-m3-onnx:/app/models/bge-m3-onnx:ro

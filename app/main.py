@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 from html import escape
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from chromadb.errors import InvalidCollectionException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin_analytics import router as admin_analytics_router
@@ -32,6 +33,7 @@ from app.core.config import get_settings, is_studio
 from app.core.logging import get_logger, log_event, setup_logging
 from app.core.pack import load_pack
 from app.ingestion.embedder import MODEL_FILE, TOKENIZER_FILE
+from app.ingestion.vector_store import recover_from_external_rebuild
 from app.core.profile import load_profile
 
 setup_logging()
@@ -88,6 +90,24 @@ app.include_router(ask_router)
 # 프로젝트 컨텍스트는 **모든 라우터보다 먼저** 걸린다 — 엔드포인트가 경로를 읽기 전에
 # "어느 프로젝트인가" 가 정해져 있어야 한다.
 app.add_middleware(project_context.ProjectMiddleware)
+
+
+@app.exception_handler(InvalidCollectionException)
+async def _stale_collection(request: Request, exc: InvalidCollectionException) -> JSONResponse:
+    """밖에서 색인을 다시 만들면 쥐고 있던 핸들이 죽는다 — 버리고 **다음 요청부터** 살아난다.
+
+    그냥 두면 재시작할 때까지 계속 500 이 난다(2026-10-07 개발 서버). 여기서 핸들을 버리고,
+    **무엇을 하면 되는지 적어서** 503 으로 돌려준다 — 빈 500 은 화면만 보고 원인을 알 수 없다.
+
+    이 요청을 안에서 다시 시도하지는 않는다. 스트리밍 응답이 이미 시작됐을 수도 있고, 다시
+    시도해서 또 실패하면 같은 자리를 두 번 도는 것뿐이다.
+    """
+    log_event(logger, "stale collection handle", path=str(request.url.path), error=str(exc))
+    recover_from_external_rebuild()
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "색인이 방금 다시 만들어졌습니다. 다시 시도해 주세요."},
+    )
 
 app.include_router(brand_router)
 app.include_router(library_router)

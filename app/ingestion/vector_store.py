@@ -59,6 +59,30 @@ def reset_client() -> None:
         _CLIENTS.clear()
 
 
+def recover_from_external_rebuild() -> None:
+    """**다른 프로세스가** 컬렉션을 다시 만들었을 때 핸들을 새로 잡는다.
+
+    클라이언트는 폴더마다 하나를 오래 들고 있고(`get_client`), 인덱스 객체도 캐시된다
+    (`pipeline.retrieve.get_retriever`). 그 사이 `scripts/pack_index.py` 같은 **별도
+    프로세스**가 컬렉션을 지우고 새로 만들면, 서버가 쥔 핸들의 컬렉션 id 는 이미 없는
+    것이 된다. 그때 Chroma 가 `InvalidCollectionException` 을 던진다.
+
+    2026-10-07 에 개발 서버에서 겪었다. 자료를 올리고 `docker exec ... pack_index.py` 로
+    색인했더니 사용자 화면(`/api/drive`)이 **재시작할 때까지 계속 500** 이었다. 색인은
+    멀쩡히 끝났고 로그에도 오류가 없어서, 화면만 보고는 원인을 알 수 없었다.
+
+    앱 안에서 하는 재색인은 이 문제가 없다(`reset_retriever()` 를 부른다). 밖에서 돌릴
+    길을 막을 수는 없으므로 — 서버를 안 띄운 채 반입 절차에서 돌리는 것이 그 스크립트의
+    본래 용도다 — 여기서 받아 준다.
+    """
+    reset_client()
+    # 순환 import 를 피해 여기서 부른다(pipeline 이 ingestion 을 쓴다).
+    from app.pipeline.retrieve import reset_retriever
+
+    reset_retriever()
+    log_event(logger, "recovered from external rebuild")
+
+
 def embed_model_name() -> str:
     """컬렉션에 적어 두는 '무엇으로 색인했는가'. 모델 폴더 이름을 쓴다."""
     return Path(get_settings().embed_onnx_dir).name

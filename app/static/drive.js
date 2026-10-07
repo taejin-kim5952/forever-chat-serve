@@ -264,8 +264,10 @@
         esc(p.project_id) + '" aria-pressed="' + on + '">' +
         '<span class="tick" aria-hidden="true"><svg class="i"><use href="#ic-check"/></svg></span>' + folderArt +
         '<h3>' + esc(p.name) + '</h3>' +
-        '<div class="n">자료 ' + p.doc_count + '건</div>' +
-        '<div class="sz">' + fmtSize(p.bytes) + '</div></a>';
+        /* 목록과 **같은 기준**으로 셉니다(원본이 있는 것만). 카드가 5건이라 해 놓고
+           들어가면 2줄만 있으면, 셋이 어디 갔는지 알 수 없습니다. */
+        '<div class="n">자료 ' + originalsOf(p.project_id).length + '건</div>' +
+        '<div class="sz">' + fmtSize(originalBytes(p.project_id)) + '</div></a>';
     }).join('');
     /* 프로젝트 만들기·수정은 **관리자 화면**에 있습니다. 운영 행위라 자료를 보러 온
        화면에 둘 자리가 아닙니다(2026-10-07). 서버는 처음부터 관리자 인증 뒤였습니다. */
@@ -329,8 +331,21 @@
   var pageSizeEl = $('pageSize');
   function pageSize() { return pageSizeEl.value === 'all' ? Infinity : Number(pageSizeEl.value); }
 
+  /* 내려받을 원본이 붙어 있는가. `files` 가 비면 본문뿐이다. */
+  function hasOriginal(d) { return !!(d.files && d.files.length); }
+  function originalsOf(projectId) {
+    return state.docs.filter(function (d) { return d.project === projectId && hasOriginal(d); });
+  }
+  function originalBytes(projectId) {
+    return originalsOf(projectId).reduce(function (a, d) { return a + (d.bytes || 0); }, 0);
+  }
+
   function visibleDocs() {
     return state.docs.filter(function (d) {
+      /* **원본이 있는 것만** 목록에 둡니다. 본문(.md)은 검색하라고 만든 것이라 사람이
+         받을 이유가 없습니다(2026-10-07). 본문은 AI 검색의 '참고 자료' 에서 눌러
+         원문으로 봅니다 — 사라지는 것이 아니라 이 목록에서만 빠집니다. */
+      if (!hasOriginal(d)) return false;
       if (roleOf(d.project) !== viewRole()) return false;
       if (state.projectId && d.project !== state.projectId) return false;
       if (count(state.selKinds) && !state.selKinds[d.kind]) return false;
@@ -378,10 +393,18 @@
         ? '아직 자료실이 없습니다. 관리자 설정 → 프로젝트에서 용도를 \'자료실\' 로 만드세요.'
         : '아직 프로젝트가 없습니다. 관리자 설정 → 프로젝트에서 만드세요.';
     } else {
+      /* 본문은 있는데 원본이 하나도 없는 경우가 흔합니다(검색용 .md 만 올린 프로젝트).
+         그때 '자료가 없습니다' 라고 하면 올린 사람이 사라진 줄 압니다. */
+      var onlyBody = !total && state.docs.some(function (d) {
+        return roleOf(d.project) === viewRole() &&
+          (!state.projectId || d.project === state.projectId);
+      });
       emptyEl.textContent = total
         ? '조건에 맞는 자료가 없습니다.'
-        : (STUDIO ? '아직 자료가 없습니다. 아래 영역에 파일을 끌어다 놓으세요.'
-                  : '아직 자료가 없습니다. 관리자가 자료를 등록하면 보입니다.');
+        : onlyBody
+          ? '내려받을 원본이 없습니다. 본문(MD)은 AI 검색에만 쓰입니다.'
+          : (STUDIO ? '아직 자료가 없습니다. 아래 영역에 파일을 끌어다 놓으세요.'
+                    : '아직 자료가 없습니다. 관리자가 자료를 등록하면 보입니다.');
     }
 
     var p = projectOf(state.projectId);
@@ -1074,7 +1097,7 @@
     box.innerHTML = rows.concat(mine.map(function (p) {
       return '<a href="#" data-np="' + esc(p.project_id) + '"' +
         (p.project_id === state.projectId ? ' class="on"' : '') + '>' +
-        esc(p.name) + '<em>' + p.doc_count + '</em></a>';
+        esc(p.name) + '<em>' + originalsOf(p.project_id).length + '</em></a>';
     })).join('');
   }
 
@@ -1141,8 +1164,11 @@
     return loadDrive().then(function (r) {
       state.projects = r.projects || [];
       state.docs = r.docs || [];
-      $('stDocs').textContent = state.docs.length;
-      $('stSize').textContent = fmtSize(r.total_bytes || 0);
+      /* '보관 중인 자료' 도 **받을 수 있는 것**을 셉니다. 본문(.md)은 검색용이라
+         보관물로 세면 숫자가 목록과 어긋납니다. */
+      var kept = state.docs.filter(hasOriginal);
+      $('stDocs').textContent = kept.length;
+      $('stSize').textContent = fmtSize(kept.reduce(function (a, d) { return a + (d.bytes || 0); }, 0));
     });
   }
 

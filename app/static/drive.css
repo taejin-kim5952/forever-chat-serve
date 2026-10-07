@@ -203,6 +203,9 @@
   /* `AI 지식 검색` 에서는 목록 쪽을 통째로 감춥니다. 검색하러 온 사람에게 폴더와 파일
      목록이 먼저 보이면, 찾던 것이 무엇이었는지부터 다시 떠올려야 합니다. */
   .app.is_search [data-browse]{display:none !important}
+  /* 회의는 **독립된 화면**입니다. 자료 목록·검색창·검색 결과가 함께 보이면 지금 무엇을
+     하는 화면인지 흐려집니다(2026-10-08). */
+  .app.is_meeting [data-browse]{display:none !important}
   .app.is_search .ai-search{margin-top:4px}
 
   /* ---------- 로고 자리 ---------- */
@@ -502,7 +505,11 @@
 
   /* ---------- AI 프로젝트 미팅 (2026-10-07) ----------
      자료 검색과 **다른 화면**입니다. 메뉴를 고르면 목록·검색 자리를 대신 차지합니다. */
-  .app.is_meeting .drive, .app.is_meeting .ai-search, .app.is_meeting .ans{display:none}
+  /* 검색창과 검색 결과도 감춥니다. 전에는 `.drive`·`.ans` 라는 **없는 클래스**를 적어
+     두어 규칙이 헛돌고 있었습니다(2026-10-08). 실제 이름은 `.ai-search`·`.ai-result` 이고,
+     자료 목록은 `[data-browse]` 로 묶여 있습니다. */
+  .app.is_meeting .ai-search,
+  .app.is_meeting .ai-result{display:none !important}
   .mt{display:flex;flex-direction:column;gap:14px}
   .mt_ask{border-radius:18px;border:1.5px solid var(--brand);background:#fff;
           box-shadow:0 10px 24px rgba(16,24,40,.06)}
@@ -520,6 +527,8 @@
   .mt_chip i{font-style:normal;font-size:11px;opacity:.75}
   .mt_chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
   .mt_empty{font-size:12.5px;color:var(--muted)}
+  .mt_project{height:30px;max-width:200px;border:1px solid var(--line);border-radius:8px;
+              padding:0 8px;font-size:12.5px;color:var(--ink);background:#fff}
   .mt_rounds{height:30px;border:1px solid var(--line);border-radius:8px;padding:0 8px;
              font-size:12.5px;color:var(--ink);background:#fff}
   .mt_note{flex:1;min-width:160px;text-align:right;font-size:12px;color:var(--muted)}

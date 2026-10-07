@@ -519,3 +519,62 @@ def test_a_normal_turn_that_mentions_the_topic_is_kept(monkeypatch):
         "주제", [personas_mod.Persona(persona_id="p", name="기획자")], []) if k == "turn"]
 
     assert turns[0]["text"], "멀쩡한 발언이 걸러졌습니다"
+
+
+# ── 회의는 독립된 화면인가 ────────────────────────────────────────────────
+
+
+def _drive(name):
+    from pathlib import Path
+    return (Path(__file__).resolve().parents[1] / "app" / "static" / name).read_text(
+        encoding="utf-8")
+
+
+def test_the_meeting_picks_its_own_project():
+    """회의는 **자기 프로젝트**를 가진다.
+
+    전에는 왼쪽 `프로젝트` 메뉴에서 고르고 와야 열 수 있었다. 회의를 열려고 메뉴를 두 번
+    오가야 하고, 회의 화면만 보고는 어느 프로젝트로 여는지 알 수 없었다. 자료 목록의
+    선택(`state.projectId`)과 섞으면 회의 프로젝트를 바꿨을 뿐인데 자료 목록이 따라 바뀐다.
+    """
+    js = _drive("drive.js")
+    html = _drive("drive.html")
+
+    assert 'id="mtProject"' in html, "회의 화면에 프로젝트 고르개가 없습니다"
+    assert "mt.projectId" in js
+    # 회의를 **여는** 자리가 자료 화면의 선택을 쓰면 안 된다.
+    start = js.index("function mtOpen()")
+    body = js[start:js.index("mt.stream = new EventSource", start)]
+    assert "state.projectId" not in body, (
+        "회의가 자료 목록의 프로젝트 선택을 쓰고 있습니다"
+    )
+
+
+def test_the_meeting_view_hides_the_other_screens():
+    """자료 목록·검색창·검색 결과가 함께 보이면 무엇을 하는 화면인지 흐려진다.
+
+    전에는 `.drive`·`.ans` 라는 **없는 클래스**를 적어 두어 규칙이 헛돌고 있었다.
+    """
+    css = _drive("drive.css")
+    html = _drive("drive.html")
+
+    rule = [line for line in css.splitlines() if ".app.is_meeting" in line]
+    joined = chr(10).join(rule)
+    assert "[data-browse]" in joined, "자료 목록을 감추지 않습니다"
+    assert ".ai-search" in joined and ".ai-result" in joined
+
+    # 규칙이 가리키는 것이 **실제로 있는** 선택자인가. 없는 클래스를 적어 두면 조용히
+    # 헛돈다 — 그래서 이름을 마크업에서 확인한다.
+    assert "data-browse" in html
+    assert 'class="ai-search"' in html
+    assert 'class="ai-result"' in html
+
+
+def test_the_meeting_view_sets_its_own_title():
+    """제목을 안 바꾸고 빠져나가면 앞 화면의 제목이 그대로 남는다."""
+    js = _drive("drive.js")
+    start = js.index("if (view === 'meeting')")
+    branch = js[start:js.index("return;", start)]
+
+    assert "VIEW_TITLE.meeting" in branch, "회의 화면이 제목을 정하지 않습니다"
+    assert "openNavProjects(false)" in branch, "펼쳐 둔 프로젝트 하위 메뉴가 남습니다"

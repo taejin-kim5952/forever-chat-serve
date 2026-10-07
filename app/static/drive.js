@@ -316,7 +316,7 @@
     /* 프로젝트를 바꾸면 **앞 답은 지웁니다.** 검색 범위가 달라졌는데 그 답이 남아 있으면
        새 프로젝트에서 나온 답으로 읽힙니다 — 참고 자료도 앞 프로젝트 것입니다. */
     clearPanel();
-    if (state.view === 'meeting') mtSyncNote();   /* 회의 안내도 그 프로젝트 기준으로 */
+    /* 회의는 **자기 프로젝트**를 가집니다. 여기서 건드리지 않습니다. */
   }
 
   var prev = $('prev'), next = $('next');
@@ -1173,7 +1173,18 @@
        있는지가 흐려집니다. */
     show($('meetingPane'), view === 'meeting');
     $('app').classList.toggle('is_meeting', view === 'meeting');
-    if (view === 'meeting') { mtInit(); return; }
+    if (view === 'meeting') {
+      /* 제목·하위 메뉴·답변 패널을 **여기서 정리하고** 빠져나갑니다. 전에는 그냥
+         `return` 해서 앞 화면의 제목(`프로젝트` · `AI 지식 검색`)이 그대로 남고, 펼쳐 둔
+         프로젝트 하위 메뉴도 열린 채였습니다(2026-10-08). */
+      $('pageTitle').textContent = VIEW_TITLE.meeting;
+      $('crumb').textContent = '역할이 다른 AI 들이 한 주제를 두고 이야기합니다';
+      openNavProjects(false);
+      faqOpen(false);
+      clearPanel();
+      mtInit();
+      return;
+    }
     openNavProjects(view === 'browse');
     faqOpen(false);     /* 범위가 바뀌면 열려 있던 목록은 닫습니다 */
     /* 검색 화면이 아니면 **답이 있을 때만** 패널을 둡니다. 추천 질문만 들어 있는 패널이
@@ -1225,10 +1236,13 @@
 
      한 바퀴에 수십 초가 걸리므로 발언이 끝날 때마다 하나씩 받습니다(SSE). 다 끝난 뒤에
      한 번에 받으면 그동안 멈춘 것과 구분되지 않습니다. */
-  var mt = { loaded: false, people: [], picked: {}, max: 6, available: true, stream: null };
+  /* `projectId` 를 **따로** 둡니다. 자료를 둘러보는 화면의 선택(`state.projectId`)과
+     섞으면, 회의 프로젝트를 바꿨을 뿐인데 자료 목록이 따라 바뀝니다. */
+  var mt = { loaded: false, people: [], picked: {}, max: 6, available: true, stream: null,
+             projectId: null };
 
   function mtInit() {
-    if (mt.loaded) { mtSyncNote(); return; }
+    if (mt.loaded) { mtRenderProjects(); mtSyncNote(); return; }
     mt.loaded = true;
     fetch('/api/meeting/personas').then(function (r) { return r.json(); }).then(function (d) {
       mt.people = d.personas || [];
@@ -1238,8 +1252,31 @@
          보내다 거절당합니다 — 고르는 것이 목적이 아니라 빼는 것이 목적입니다. */
       mt.people.slice(0, mt.max).forEach(function (p) { mt.picked[p.persona_id] = true; });
       mtRenderPeople();
+      mtRenderProjects();
       mtSyncNote();
     }, function () { $('mtNote').textContent = '참가자를 불러오지 못했습니다.'; });
+  }
+
+  /* 회의할 프로젝트. **지식 프로젝트만** 보여 줍니다 — 자료실(받아 쓰는 양식)에는
+     토론할 거리가 없습니다. */
+  function mtRenderProjects() {
+    var sel = $('mtProject');
+    var mine = state.projects.filter(function (p) {
+      return (p.role || 'knowledge') === 'knowledge';
+    });
+    sel.innerHTML = mine.length
+      ? mine.map(function (p) {
+          return '<option value="' + esc(p.project_id) + '">' + esc(p.name) + '</option>';
+        }).join('')
+      : '<option value="">프로젝트가 없습니다</option>';
+    /* 들어올 때 **자료 화면에서 보던 프로젝트**를 기본값으로 둡니다. 그 프로젝트를 보다가
+       회의를 여는 흐름이 가장 흔하고, 그때 다시 고르게 하면 번거롭습니다. 고른 뒤에는
+       서로 건드리지 않습니다. */
+    if (!mt.projectId) {
+      mt.projectId = (state.projectId && roleOf(state.projectId) === 'knowledge')
+        ? state.projectId : (mine[0] ? mine[0].project_id : null);
+    }
+    if (mt.projectId) sel.value = mt.projectId;
   }
 
   function mtRenderPeople() {
@@ -1273,10 +1310,10 @@
 
   /* 보낼 수 있는 상태인지 한 줄로 알려 줍니다. 버튼만 잠그면 왜 안 되는지 알 수 없습니다. */
   function mtSyncNote() {
-    var p = projectOf(state.projectId);
+    var p = projectOf(mt.projectId);
     var n = mtPicked().length;
     var why = !mt.available ? '운영에서는 회의를 열 수 없습니다. 스튜디오에서 진행합니다.'
-      : !p ? '왼쪽에서 프로젝트를 먼저 고르세요. 그 프로젝트의 자료를 근거로 이야기합니다.'
+      : !p ? '회의할 프로젝트가 없습니다. 관리자 설정에서 만들어 주세요.'
       : !n ? '참가자를 한 명 이상 고르세요.'
       : n + '명이 ' + p.name + ' 자료를 보고 이야기합니다.';
     $('mtNote').textContent = why;
@@ -1286,7 +1323,7 @@
   function mtOpen() {
     var topic = $('mtTopic').value.trim();
     if (!topic || mt.stream) return;
-    if (!mt.available || !state.projectId || !mtPicked().length) { mtSyncNote(); return; }
+    if (!mt.available || !mt.projectId || !mtPicked().length) { mtSyncNote(); return; }
 
     $('mtBoard').hidden = false;
     $('mtHeadTopic').textContent = '“' + topic + '”';
@@ -1298,7 +1335,7 @@
     var qs = 'topic=' + encodeURIComponent(topic) +
       '&personas=' + encodeURIComponent(mtPicked().map(function (p) { return p.persona_id; }).join(',')) +
       '&rounds=' + encodeURIComponent($('mtRounds').value || '1') +
-      '&project=' + encodeURIComponent(state.projectId);
+      '&project=' + encodeURIComponent(mt.projectId);
     mt.stream = new EventSource('/api/meeting/stream?' + qs);
     mtSyncNote();
 
@@ -1369,6 +1406,15 @@
     $('mtWait').hidden = true;
     mtSyncNote();
   }
+
+  $('mtProject').addEventListener('change', function () {
+    mt.projectId = this.value || null;
+    /* 범위가 달라졌으니 앞 회의는 지웁니다. 남겨 두면 새 프로젝트에서 나온 이야기로
+       읽힙니다 — 보는 자료도 앞 프로젝트 것입니다. */
+    mtEnd();
+    $('mtBoard').hidden = true;
+    mtSyncNote();
+  });
 
   $('mtForm').addEventListener('submit', function (e) { e.preventDefault(); mtOpen(); });
   $('mtClose').addEventListener('click', function () {

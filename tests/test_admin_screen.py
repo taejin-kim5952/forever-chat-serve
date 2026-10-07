@@ -80,6 +80,31 @@ def test_screens_load_assets_locally_and_absolutely():
             assert asset.startswith("/static/"), f"{name}: 상대경로 자원이 있습니다: {asset}"
 
 
+def test_logging_in_loads_the_project_before_anything_else():
+    """로그인 직후에도 **프로젝트를 먼저** 받아야 한다.
+
+    `boot()` 은 그렇게 한다. 그런데 로그인 모달로 들어온 길에서는 `reloadAll()` 만 불러서
+    `PROJECT` 가 빈 채로 남았다. 그러면 `X-Project` 없이 요청이 나가고 서버가 기본 팩으로
+    떨어뜨린다.
+
+    **선택기까지 숨어 있어 고칠 방법이 화면에 없다**(프로젝트가 2개 이상일 때만 보이는데,
+    목록을 안 받았으니 0개로 남는다). 그 상태로 문서를 올리면 엉뚱한 프로젝트에 들어가고
+    **오류는 나지 않는다.**
+
+    새로고침하면 그때는 로그인된 상태라 `boot()` 이 제대로 부른다 — 그래서 "새로고침하면
+    되던데" 로만 보였다(2026-10-07).
+    """
+    source = ADMIN_JS.read_text(encoding="utf-8")
+    # `'/api/admin/login'` 은 ajaxError 핸들러에도 나온다. **보내는 자리**를 집는다.
+    start = source.index("API.send('POST', '/api/admin/login'")
+    block = source[start:source.index(".fail(", start)]
+
+    assert "loadProjects" in block, (
+        "로그인 성공 뒤에 loadProjects 를 부르지 않습니다 — PROJECT 가 비어 "
+        "기본 팩으로 떨어지고, 올린 문서가 엉뚱한 프로젝트에 들어갑니다"
+    )
+
+
 def test_the_logo_link_is_not_underlined(client):
     """로고를 **안 올린 설치**에서 로고 자리가 파란 밑줄 링크가 되면 안 된다.
 

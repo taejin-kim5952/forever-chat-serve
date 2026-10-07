@@ -59,6 +59,7 @@ _TURN_PROMPT = """[회의 주제]
 
 [당신]
 {name}{title} 입니다. {prompt}
+{opener}
 
 위 주제에 대해 **{name} 의 눈으로** 한 번 말하세요.
 
@@ -74,6 +75,15 @@ _TURN_PROMPT = """[회의 주제]
 - {language_rule}
 
 당신이 할 말만 쓰세요. 이름이나 `{name}:` 같은 머리말을 붙이지 마세요."""
+
+# 첫 발언자에게만 붙는다. 회의를 여는 사람이 주제를 못 박으면 뒤에 말하는 사람들이 그
+# 틀 안에서 말한다 — 안 그러면 발췌에 끌려가 **자료 요약**이 되어 버린다(2026-10-07 에
+# "이름을 바꾼다면" 을 물었는데 넷 다 포털 기능을 요약했다).
+_OPENER = """
+**당신이 회의를 엽니다.** 첫 줄에 **이 회의에서 무엇을 정해야 하는지**를 한 문장으로
+다시 적고 시작하세요. 주제를 그대로 베끼지 말고, 무엇을 결정하려는 자리인지로 바꿔 적습니다.
+    예) 주제가 "이름을 바꾼다면" 이면 → "이 회의에서 정할 것은 새 이름의 후보와 고르는 기준입니다."
+그다음 당신의 눈으로 말합니다."""
 
 _SUMMARY_PROMPT = """[회의 주제]
 {topic}
@@ -171,6 +181,9 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
                 history=_history(turns, history_budget), name=persona.name,
                 title=f"({persona.title})" if persona.title else "",
                 prompt=persona.prompt or "맡은 자리에서 보이는 것을 말합니다.",
+                # 회의를 여는 한 사람에게만. 매번 붙이면 참가자마다 주제를 다시 적어
+                # 회의록이 같은 문장으로 도배된다.
+                opener=_OPENER if (round_no == 1 and not turns) else "",
                 limit=MAX_TURN_CHARS, language_rule=language_rule,
             )
             # 화면이 **누가 어느 모델로 말했는지** 보여 줄 수 있어야 한다. 섞어 쓰면

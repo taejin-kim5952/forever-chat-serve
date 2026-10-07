@@ -150,3 +150,72 @@ def test_the_meeting_module_is_not_imported_by_the_serving_path():
     assert "from app.studio" not in head, (
         "모듈을 읽는 것만으로 studio 가 따라옵니다 — 함수 안에서 불러오세요"
     )
+
+
+# ── 회의를 끝까지 돌려 본다 ───────────────────────────────────────────────
+
+
+def test_a_meeting_runs_end_to_end(client, studio, isolated_data, monkeypatch):
+    """**실제로 한 바퀴 돌려 봐야** 잡히는 것들이 있다.
+
+    2026-10-07 에 `doc_index.search` 의 반환값을 둘로 받다가(`qa_index.search` 와 헷갈려)
+    회의가 열리자마자 죽었다. 그때 테스트 12개는 전부 통과하고 있었다 — 경계(403·400)와
+    참가자 저장만 보고 있었고, **회의를 한 번도 끝까지 돌리지 않았기 때문**이다.
+
+    모델만 가짜로 바꾸고 검색·스트리밍은 진짜를 쓴다.
+    """
+    class FakeLlm:
+        model = "fake-llm"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 2000
+
+        def chat(self, prompt, system=None, **kw):
+            return "한 마디 하겠습니다."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", FakeLlm)
+    save(client, [{"name": "기획자"}, {"name": "개발자"}])
+    ids = [p.persona_id for p in personas_mod.enabled()]
+
+    body = client.get("/api/meeting/stream", params={
+        "topic": "API Link 고도화", "personas": ",".join(ids), "rounds": "1",
+    }).text
+
+    assert "event: opened" in body
+    assert body.count("event: turn") == 2, "참가자 수만큼 발언이 나와야 합니다"
+    assert "event: summary" in body
+    assert "event: done" in body
+
+
+def test_a_meeting_opens_even_with_no_matching_documents(client, studio, isolated_data,
+                                                         monkeypatch):
+    """자료가 없어도 **열리고**, 자료가 없다고 알려 준다.
+
+    자료가 없다고 회의가 안 열리면 새 프로젝트에서는 쓸 수가 없다. 대신 참가자들에게
+    '아는 척하지 마라' 고 일러 두고, 화면에도 그렇게 적는다.
+    """
+    class FakeLlm:
+        model = "fake-llm"
+
+        def __init__(self, *a, **kw):
+            pass
+
+        def source_budget_chars(self):
+            return 2000
+
+        def chat(self, prompt, system=None, **kw):
+            return "자료가 없어 말하기 어렵습니다."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", FakeLlm)
+    save(client, [{"name": "기획자"}])
+    ids = [p.persona_id for p in personas_mod.enabled()]
+
+    body = client.get("/api/meeting/stream", params={
+        "topic": "자료에 없는 주제", "personas": ",".join(ids),
+    }).text
+
+    assert "event: opened" in body
+    assert "event: turn" in body

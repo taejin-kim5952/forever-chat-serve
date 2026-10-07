@@ -69,7 +69,9 @@ def _sources(topic: str, limit: int) -> list[dict]:
 
     config = load_runtime_config()
     retriever = get_retriever()
-    _, hits = retriever.doc_index.search(topic, limit)
+    # `doc_index.search` 는 **목록만** 돌려준다(`qa_index.search` 는 벡터도 함께 준다 —
+    # 거기에 맞춰 둘로 받다가 깨졌다, 2026-10-07).
+    hits = retriever.doc_index.search(topic, limit)
     return [h for h in hits if h["similarity"] >= config.related_docs_floor]
 
 

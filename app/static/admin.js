@@ -2506,8 +2506,16 @@ $(function(){
   function docFileCell(d, studio){
     if(!d.file_name) return '<span class="qr_muted">—</span>';
     var label = esc(d.file_name) + ' · ' + fmtBytes(d.file_bytes);
-    return '<span class="admin_doc_file" title="' + esc(d.file_name) + '">' +
-      '<span class="admin_doc_file_name">' + label + '</span>' +
+    /* 사용자 화면과 **같은 경로**로 받습니다(`/api/drive/{doc_id}/file`). 인증이 없는 공개
+       경로이고, 그 문서에 묶인 원본만 고를 수 있습니다(`find_named`).
+
+       헤더가 아니라 `?project=` 로 범위를 줍니다 — `<a href>` 는 `X-Project` 를 실을 수
+       없습니다. 그래서 관리자에서 고른 프로젝트를 주소에 직접 붙입니다. */
+    var href = '/api/drive/' + encodeURIComponent(d.doc_id) + '/file' +
+      '?name=' + encodeURIComponent(d.file_name) +
+      (PROJECT ? '&project=' + encodeURIComponent(PROJECT) : '');
+    return '<span class="admin_doc_file" title="' + esc(d.file_name) + ' 내려받기">' +
+      '<a class="admin_doc_file_name" href="' + href + '" download>' + label + '</a>' +
       (studio ? '<button type="button" class="admin_doc_file_del" data-doc-file="' +
         esc(d.file_name) + '" aria-label="원본 지우기" title="원본 지우기">✕</button>' : '') +
       '</span>';

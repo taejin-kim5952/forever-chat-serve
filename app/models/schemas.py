@@ -207,6 +207,13 @@ class ReindexResponse(BaseModel):
 # ─────────────────────────────────────────────────────────── 관리자 · 문서
 
 
+class DocFileDeleteResponse(BaseModel):
+    """원본 하나를 지운 결과. 본문(`.md`)은 건드리지 않는다."""
+
+    name: str
+    status: str = "deleted"
+
+
 class DocSummary(BaseModel):
     doc_id: str
     title: str

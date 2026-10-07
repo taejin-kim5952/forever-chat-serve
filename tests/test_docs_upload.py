@@ -193,6 +193,69 @@ def test_too_many_files_in_one_request_are_refused(client, auth, studio):
     assert response.status_code == 400
 
 
+# ── 원본만 지우기 ───────────────────────────────────────────────────────────
+
+
+PDF = b"%PDF-1.4\n%%EOF\n"
+WITH_SOURCE = """---
+title: API Link 소개
+source_files: [소개서.pdf]
+---
+
+# API Link 소개
+
+## 무엇인가
+
+API 를 찾고 구독하는 포털입니다. 검색에 걸릴 만큼 긴 문장을 넣어 둡니다.
+"""
+
+
+def upload_pair(client, auth):
+    """본문 하나와 그 본문이 가리키는 원본 하나를 올린다."""
+    return upload(client, auth, [
+        ("api-link-intro.md", WITH_SOURCE.encode()),
+        ("소개서.pdf", PDF),
+    ])
+
+
+def test_an_original_can_be_removed_without_touching_the_document(client, auth, studio):
+    """**본문은 그대로 두고 원본만** 내릴 수 있어야 한다.
+
+    문서를 지우면 원본도 함께 지워지는 길은 있었는데(`delete_doc`), 그 반대가 없었다.
+    잘못 올린 PDF 를 내리려면 본문까지 지웠다가 다시 올려야 했다.
+    """
+    upload_pair(client, auth)
+    before = client.get("/api/admin/docs", headers=auth).json()
+    assert [d for d in before if d["doc_id"] == "api-link-intro"][0]["file_name"] == "소개서.pdf"
+
+    removed = client.delete("/api/admin/docs/files/소개서.pdf", headers=auth)
+    assert removed.status_code == 200
+
+    after = client.get("/api/admin/docs", headers=auth).json()
+    mine = [d for d in after if d["doc_id"] == "api-link-intro"]
+    assert mine, "본문까지 사라졌습니다 — 원본만 지워야 합니다"
+    assert not mine[0]["file_name"], "원본이 남아 있습니다"
+    # 검색은 그대로 돈다. AI 가 읽는 것은 본문이고, 원본은 사람이 내려받는 것뿐이다.
+    assert mine[0]["chunk_count"] > 0
+
+
+def test_removing_an_original_that_is_not_there_is_404(client, auth, studio):
+    """없는 것을 지웠다고 성공이라 하면, 이름을 잘못 적은 사람이 지운 줄 안다."""
+    assert client.delete("/api/admin/docs/files/없는파일.pdf", headers=auth).status_code == 404
+
+
+def test_an_original_cannot_be_removed_in_serve_mode(client, auth):
+    """운영은 자료를 받는 쪽이다. 거기서 지우면 다음 반입 때 조용히 되살아난다."""
+    assert client.delete("/api/admin/docs/files/소개서.pdf", headers=auth).status_code == 403
+
+
+@pytest.mark.parametrize("name", ["../../etc/passwd", "하위/소개서.pdf"])
+def test_path_characters_are_refused(client, auth, studio, name):
+    """이름이 경로로 해석되면 보관함 밖의 파일을 지울 수 있다."""
+    response = client.delete("/api/admin/docs/files/" + name, headers=auth)
+    assert response.status_code in (400, 404), "경로 문자가 그대로 통과했습니다"
+
+
 # ── 화면과 서버가 같은 목록을 보는가 ────────────────────────────────────────
 
 

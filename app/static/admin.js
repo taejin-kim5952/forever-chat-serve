@@ -200,6 +200,10 @@ function mapDoc(row){
     updated:(row.updated || '').slice(0, 10),
     chunks:row.chunk_count || 0,
     qa_count:row.linked_qa_count || 0,
+    /* 원본 파일. 서버가 주는데 여기서 버리고 있었습니다(2026-10-07). */
+    file_name:row.file_name || '',
+    file_kind:row.file_kind || '',
+    file_bytes:row.file_bytes || 0,
     body:null   /* 편집 모달을 열 때 받아옵니다 */
   };
 }
@@ -2486,6 +2490,47 @@ $(function(){
       return !q || (d.title + d.doc_id + d.category_name).toLowerCase().indexOf(q) > -1;
     });
   }
+  /* 원본 칸. 붙은 것이 없으면 **빈칸이 아니라 '—'** 입니다 — 빈칸은 '아직 안 그렸나' 로
+     읽히고, 원본이 없는 것은 정상입니다(본문만 올린 문서).
+
+     지우기는 스튜디오에서만 보입니다. 본문은 그대로 두고 **원본만** 내립니다. */
+  /* 사용자 화면(drive.js 의 fmtSize)과 **같은 규칙**입니다. 같은 파일이 두 화면에서 다른
+     크기로 보이면 어느 쪽이 맞는지 알 수 없습니다. */
+  function fmtBytes(bytes){
+    if(bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+    if(bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    if(bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+    return (bytes || 0) + ' B';
+  }
+
+  function docFileCell(d, studio){
+    if(!d.file_name) return '<span class="qr_muted">—</span>';
+    var label = esc(d.file_name) + ' · ' + fmtBytes(d.file_bytes);
+    return '<span class="admin_doc_file" title="' + esc(d.file_name) + '">' +
+      '<span class="admin_doc_file_name">' + label + '</span>' +
+      (studio ? '<button type="button" class="admin_doc_file_del" data-doc-file="' +
+        esc(d.file_name) + '" aria-label="원본 지우기" title="원본 지우기">✕</button>' : '') +
+      '</span>';
+  }
+
+  /* 원본만 지웁니다. 되돌릴 수 없으므로 확인을 받습니다 — 다시 올리려면 파일이 있어야
+     하는데, 지운 사람이 그 파일을 가지고 있지 않을 수 있습니다. */
+  $('#docBody').on('click', '[data-doc-file]', function(e){
+    e.stopPropagation();        /* 줄 클릭(문서 열기)까지 번지지 않게 */
+    var name = $(this).data('docFile');
+    askConfirm('원본 ' + name + ' 을 지울까요?',
+      '본문은 그대로 둡니다. 사용자 화면의 내려받기만 사라집니다.', true, function(){
+        API.send('DELETE', '/api/admin/docs/files/' + encodeURIComponent(name))
+          .done(function(){
+            toast('원본을 지웠습니다');
+            /* 진행 현황판도 갱신합니다 — 자료 상태가 바뀌었는데 숫자가 옛것으로 남으면
+               무엇이 맞는지 알 수 없습니다(test_state_changing_actions_refresh_the_status_board). */
+            loadDocs().done(renderDocs); refreshFlow();
+          })
+          .fail(function(xhr){ toast(apiError(xhr, '지우지 못했습니다'), 'err'); });
+      });
+  });
+
   function renderDocs(){
     var rows = docRows(), studio = MODE === 'studio';
     $('[data-search="doc"]').toggleClass('is_noresult', !!FILTER.doc.q && !rows.length);
@@ -2497,6 +2542,7 @@ $(function(){
         '<td class="admin_td_ellip">' + esc(d.category_name) + '</td>' +
         '<td>' + d.updated + '</td>' +
         '<td class="qr_num">' + num(d.chunks) + '</td>' +
+        '<td>' + docFileCell(d, studio) + '</td>' +
         '<td class="qr_num">' + num(d.qa_count) + '</td>' +
         '<td>' + (studio
           ? '<button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-doc-edit>수정</button>'

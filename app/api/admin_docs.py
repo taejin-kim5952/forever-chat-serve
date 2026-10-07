@@ -23,6 +23,7 @@ from app.models.schemas import (
     DocCreateRequest,
     DocDetail,
     DocSaveRequest,
+    DocFileDeleteResponse,
     DocSaveResponse,
     DocSummary,
     DocUploadItemResult,
@@ -234,6 +235,28 @@ def save_doc(doc_id: str, request: DocSaveRequest) -> DocSaveResponse:
     chunks = get_retriever().doc_index.ingest_file(path, force=True)
     log_event(logger, "doc saved", doc_id=doc_id, chunks=chunks)
     return DocSaveResponse(doc_id=doc_id, chunks_created=chunks, status="saved")
+
+
+@router.delete("/files/{name}", response_model=DocFileDeleteResponse)
+def delete_doc_file(name: str) -> DocFileDeleteResponse:
+    """원본 하나만 지운다. **본문은 그대로 둔다.**
+
+    문서를 지우면 원본도 함께 지워지지만(`delete_doc`), 그 반대는 길이 없었다. 잘못 올린
+    PDF 를 내리려면 본문까지 지웠다가 다시 올려야 했다.
+
+    지운 뒤 그 본문은 목록에 **원본 없음**으로 남는다. 검색과 답변은 그대로 동작한다 —
+    AI 가 읽는 것은 본문이고, 원본은 사람이 내려받는 것뿐이다.
+
+    경로로 해석될 이름은 막는다. `remove_file` 이 보관함을 훑어 이름만 맞춰 지우므로 그
+    자체로 안전하지만, 받는 자리에서 거르는 편이 읽기 쉽다.
+    """
+    _require_studio()
+    if not name or "/" in name or "\\" in name or name.startswith("."):
+        raise HTTPException(status_code=400, detail="파일 이름에 경로 문자를 쓸 수 없습니다.")
+    if not doc_files.remove_file(name):
+        raise HTTPException(status_code=404, detail="원본 파일을 찾을 수 없습니다.")
+    log_event(logger, "doc file deleted", name=name)
+    return DocFileDeleteResponse(name=name)
 
 
 @router.delete("/{doc_id}", response_model=DocSaveResponse)

@@ -217,6 +217,13 @@ _ANSWER_PROMPT = """[사용자 질문]
 
 위 발췌만 근거로 이 질문에 답하세요.
 
+[답변 규칙]
+- 발췌에 없는 것은 **적지 않습니다.** 모르면 `근거: 없음` 으로 두세요.
+- **스스로에게 남기는 메모를 적지 마세요** — `(확인 필요)` · `(추정)` · `(미확인)` ·
+  `TODO` 같은 말이 답변에 들어가면 그대로 사용자에게 나갑니다. 확신이 없으면 그 문장을
+  빼거나 `근거: 없음` 으로 두세요.
+- 발췌에 없는 화면·메뉴·시스템 이름을 지어내지 마세요.
+
 [출력 형식] 아래 두 줄 형식을 정확히 지키세요.
 근거: 있음 | 없음
 답변: (근거가 있을 때만 답변 본문. 없으면 이 줄을 비웁니다)"""
@@ -228,10 +235,17 @@ _VARIANT_PROMPT = """아래 질문과 **뜻이 같은** 다른 표현을 {count}
 
 [규칙]
 1. 뜻이 달라지면 안 됩니다. 범위를 넓히거나 좁히지 마세요.
-2. 표현을 다양하게 섞으세요 — 정중한 문장, 짧은 구어체, 명사만 나열한 것, 줄임말.
-   (예: "권한그룹은 무엇을 선택해야 하나요?", "권한그룹 뭐 골라요?", "권한그룹 선택 기준")
-3. **한국어로만** 쓰세요. 화면명·필드명·코드는 원문 표기를 유지합니다.
-4. 한 줄에 하나씩, 번호나 기호 없이 질문만 쓰세요."""
+2. 어투를 **골고루** 섞으세요. 아래 네 가지가 모두 들어가야 합니다.
+   - 정중한 질문   : "권한그룹은 무엇을 선택해야 하나요?"
+   - 짧은 구어체   : "권한그룹 뭐 골라요?"
+   - 요청·명령형   : "권한그룹 선택 기준 알려줘", "권한그룹 뭐 고르는지 검색해줘"
+   - 키워드 나열   : "권한그룹 선택 기준"
+3. 그중 **3개 이상**은 질문의 핵심 낱말을 **그대로 두고 말끝만** 바꾸세요.
+   (예: "권한그룹 선택 기준", "권한그룹 선택 기준 알려줘", "권한그룹 선택 기준 검색해줘")
+   낱말까지 바꾼 것(동의어)과 섞어서 내세요 — 둘 다 필요합니다.
+4. 사람들이 **검색창에 치듯 거칠게** 쓴 것도 넣으세요. 다듬지 마세요.
+5. **한국어로만** 쓰세요. 화면명·필드명·코드는 원문 표기를 유지합니다.
+6. 한 줄에 하나씩, 번호나 기호 없이 질문만 쓰세요."""
 
 
 # ─────────────────────────────────────────────────────────────────── 파싱
@@ -239,6 +253,14 @@ _VARIANT_PROMPT = """아래 질문과 **뜻이 같은** 다른 표현을 {count}
 _GROUND_LINE = re.compile(r"^\s*근거\s*[:：]\s*(.+)$")
 _ANSWER_LINE = re.compile(r"^\s*답변\s*[:：]\s*(.*)$")
 _LIST_MARKER = re.compile(r"^(?:[-*•]|\d+[.)]|Q\s*[:.)])\s*")
+# `근거: 있음 | 답변: ...` 처럼 한 줄에 붙여 쓴 경우를 가른다.
+_INLINE_ANSWER = re.compile(r"^(.*?)[|,·/]?\s*답변\s*[:：]\s*(.*)$")
+
+
+def _split_inline_answer(text: str) -> tuple[str, str]:
+    """`(근거 칸의 값, 같은 줄에 붙은 답변)`. 답변이 없으면 뒤가 빈 문자열이다."""
+    inline = _INLINE_ANSWER.match(text)
+    return (inline.group(1), inline.group(2).strip()) if inline else (text, "")
 
 
 def _parse_grounded_answer(raw: str) -> str | None:
@@ -246,15 +268,50 @@ def _parse_grounded_answer(raw: str) -> str | None:
 
     근거 여부를 **모델이 스스로 선언**하게 하는 것이 핵심이다. 검색 유사도만 보고 답을 만들게
     하면 문서에 없는 내용이 그럴듯한 문장으로 채워진다.
+
+    ### 형식은 생각보다 자주 어긋난다 (2026-09-01, 실제 모델 3종으로 확인)
+
+        근거: 있음                              ← 라벨을 빼먹는다 (qwen3.5:4b)
+        MCP 는 ... 개방형 프로토콜입니다.
+
+        근거: 있음 | 답변: MCP 서버는 ...       ← 한 줄에 붙여 쓴다 (qwen3.5:4b)
+
+        근거: Host 가 하는 일                   ← 칸에 엉뚱한 말을 쓴다 (gemma3:1b)
+        답변: Host 는 사용자와 LLM 을 ...
+
+    셋 다 예전에는 '근거 없음'으로 버렸다. 멀쩡한 답이 조용히 사라지고 사람에게는 "이 문서로는
+    답이 안 나온다"로 보였다 — 같은 모델이 다음 질문에서는 제대로 쓰므로 **드문드문** 사라지는
+    것이 더 나빴다.
+
+    ### 그래서 판정을 뒤집었다: "있음이라고 해야 통과" → **"없음이라고 하면 버린다"**
+
+    지어낸 답을 막는 것은 `있음` 이라는 **글자**가 아니라 (1) 발췌만 근거로 쓰라는 프롬프트와
+    (2) 모델이 스스로 못 하겠다고 선언하는 `없음` 이다. 그 선언은 그대로 존중한다 — 답을
+    적어 놨더라도 버린다. 칸이 비었거나 알 수 없는 말이면 **본문 유무로 판단한다**.
     """
     grounded: bool | None = None
     answer_lines: list[str] = []
+    loose_lines: list[str] = []
     collecting = False
 
     for line in raw.splitlines():
         ground = _GROUND_LINE.match(line)
         if ground:
-            grounded = "있음" in ground.group(1)
+            # 같은 줄에 답변을 붙여 쓴 경우. 판정은 **답변 앞부분**만 보고 한다 —
+            # 답변 본문에 '없음'이 들어 있다고 버리면 안 된다.
+            verdict, inline = _split_inline_answer(ground.group(1))
+            says_yes, says_no = "있음" in verdict, "없음" in verdict
+            if says_yes and says_no:
+                # `근거: 있음 | 없음` — 형식 설명의 선택지를 그대로 따라 쓴 것이다. 판정으로
+                # 읽으면 멀쩡한 답이 버려진다. 알 수 없는 것으로 두고 본문 유무로 판단한다.
+                grounded = None
+            elif says_no:
+                grounded = False
+            elif says_yes:
+                grounded = True
+            if inline:
+                collecting = True
+                answer_lines = [inline]
             continue
         answer = _ANSWER_LINE.match(line)
         if answer:
@@ -263,9 +320,13 @@ def _parse_grounded_answer(raw: str) -> str | None:
             continue
         if collecting:
             answer_lines.append(line)
+        else:
+            loose_lines.append(line)
 
     body = "\n".join(answer_lines).strip()
-    # 형식을 무시하고 본문만 뱉는 모델이 있다. 근거 줄이 아예 없으면 본문 유무로 판단한다.
+    if not body:
+        # 라벨 없이 본문만 온 경우. 형식을 무시하고 본문만 뱉는 모델도 여기로 들어온다.
+        body = "\n".join(loose_lines).strip()
     if grounded is None:
         grounded = bool(body)
     if not grounded or not body:

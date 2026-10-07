@@ -35,6 +35,8 @@ python -m uvicorn app.main:app --reload --port 18100
 ```
 
 Windows는 **`실행.bat` 더블클릭**이 위를 대신합니다(모델도 없으면 받습니다). 종료는 `stop.bat`.
+도메인 팩을 쓸 때는 팩마다 배치 파일이 따로입니다 — `실행-api.bat`(18100) · `실행-mcp.bat`(18101),
+종료는 `stop-api.bat` · `stop-mcp.bat`. 두 개가 동시에 뜹니다.
 
 **Ollama 는 QA를 만들 때만 필요합니다**(`APP_MODE=studio`). 챗봇으로 답하고 검색하는 데는
 필요 없습니다 — 임베딩이 앱 안에서 돌기 때문입니다.

@@ -8,6 +8,7 @@
 """
 
 import base64
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,10 +43,15 @@ def studio(monkeypatch):
 
 
 def log_question(question: str, result_type: str = "unresolved", channel: str = "web", vector=None):
-    """질문 1건 + 임베딩을 이력에 남긴다. 실제 응답 경로가 하는 일과 같다."""
+    """질문 1건 + 임베딩을 이력에 남긴다. 실제 응답 경로가 하는 일과 같다.
+
+    **날짜를 고정하지 않는다.** 예전에는 `2026-08-15` 로 박아 뒀는데, 분석이 기본 30일만
+    보기 때문에 그 날짜가 30일 밖으로 밀려난 뒤부터 **모든 질문이 조용히 빠져** 묶음이 0개가
+    됐다(2026-10-03 에 드러남). 코드는 그대로인데 시간이 지나 깨지는 종류다.
+    """
     log_id = new_log_id()
     append_question_log(QuestionLogEntry(
-        log_id=log_id, asked_at="2026-08-15T09:00:00", question=question,
+        log_id=log_id, asked_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"), question=question,
         result_type=result_type, channel=channel,
     ))
     append_question_embedding(log_id, vector or [1.0, 0.0, 0.0])

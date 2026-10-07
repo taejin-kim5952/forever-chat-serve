@@ -713,6 +713,10 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
 .admin_bubble .admin_md ol,.admin_bubble .admin_md ul{margin:0 0 9px;padding-left:19px;}
 .admin_bubble .admin_md li{margin-bottom:3px;}
 .admin_bubble .admin_md strong{font-weight:700;color:#1a1a1a;}
+/* 표 — 사용자 화면(drive.css 의 .msg_md table)과 같은 모양이어야 검수가 의미를 가진다. */
+.admin_bubble .admin_md table{border-collapse:collapse;margin:0 0 9px;font-size:13px;width:100%;}
+.admin_bubble .admin_md th,.admin_bubble .admin_md td{border:1px solid #e3e8f1;padding:6px 9px;text-align:left;}
+.admin_bubble .admin_md th{background:#f6f8fc;font-weight:700;color:#1a1a1a;}
 .admin_bubble .admin_md code{
   padding:1px 5px;border:1px solid var(--qr-line);border-radius:4px;background:var(--ad-soft);
   font-family:'D2Coding',Consolas,monospace;font-size:12px;color:var(--qr-accent-dark);
@@ -1275,3 +1279,22 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
 /* 모델 힌트 3상태 */
 .admin_hint:empty{display:none;}
 .admin_hint.is_warn{color:#8a5e13;font-weight:600;}
+
+/* 프로젝트 선택기 (머리) — 퍼블 산출물에 없는 영역입니다.
+   한 설치가 여러 도메인을 담을 때만 보입니다(프로젝트 1개 이하면 화면에서 숨깁니다). */
+.admin_project_wrap{display:inline-flex;align-items:center;gap:6px;margin-right:4px;}
+.admin_project_label{color:var(--qr-mute);font-size:11.5px;}
+.admin_project_sel{width:170px;height:28px;font-size:12px;}
+
+/* 로고 이미지 (chat.css 와 같은 규칙) */
+/* chat.css 와 같은 규칙 — 관리자 쪽 `.qr_logo` 에는 `max-width:52px` 도 걸려 있어
+   함께 풀어야 가로형 로고가 안 잘립니다. */
+.qr_logo:has(img){background:none;padding:0;height:auto;max-width:none;overflow:visible;border-radius:0;}
+.qr_logo img{display:block;width:auto;height:26px;max-width:180px;object-fit:contain;}
+.admin_prof_logo_prev img{display:block;width:100%;height:100%;object-fit:contain;}
+/* 마크다운 제목 — 사용자 화면(drive.css)과 같은 글이 같게 보여야 한다. */
+.admin_bubble .admin_md h1{font-size:17px;font-weight:700;color:#1a1a1a;margin:14px 0 7px;}
+.admin_bubble .admin_md h2{font-size:15.5px;font-weight:700;color:#1a1a1a;margin:13px 0 6px;padding-top:10px;border-top:1px solid #e3e8f1;}
+.admin_bubble .admin_md h3{font-size:14.5px;font-weight:700;color:#203864;margin:11px 0 5px;}
+.admin_bubble .admin_md h4,.admin_bubble .admin_md h5,.admin_bubble .admin_md h6{font-size:13.5px;font-weight:700;color:#6b7685;margin:9px 0 4px;}
+.admin_bubble .admin_md > h1:first-child,.admin_bubble .admin_md > h2:first-child{margin-top:0;padding-top:0;border-top:0;}

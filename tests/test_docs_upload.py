@@ -112,7 +112,11 @@ def test_folder_upload_registers_every_file(client, auth, studio, isolated_data)
 
 
 def test_non_document_files_are_skipped_with_a_reason(client, auth, studio, isolated_data):
-    """폴더에는 이미지·`.DS_Store` 가 섞여 있다. 조용히 버리지 않고 사유를 돌려준다."""
+    """폴더에는 이미지·`.DS_Store` 가 섞여 있다. 조용히 버리지 않고 사유를 돌려준다.
+
+    이미지는 **원본으로 보관**한다 — 색인하지 않으므로 본문과 섞이지 않게 `files/` 아래로
+    들어간다. 확장자가 없는 것(`.DS_Store`)은 받지 않는다.
+    """
     response = upload(client, auth, [
         ("문서폴더/api-등록.md", DOC.encode()),
         ("문서폴더/화면.png", b"\x89PNG\r\n"),
@@ -120,9 +124,11 @@ def test_non_document_files_are_skipped_with_a_reason(client, auth, studio, isol
     ])
 
     body = response.json()
-    assert (body["created"], body["skipped"]) == (1, 2)
+    assert (body["created"], body["attached"], body["skipped"]) == (1, 1, 1)
     assert all(item["reason"] for item in body["items"] if item["status"] == "skipped")
+    # 원본이 본문 폴더에 섞이면 `*.md` 글롭 밖이라 목록에서 사라진다.
     assert not (Path(isolated_data.raw_docs_dir) / "화면.png").exists()
+    assert (Path(isolated_data.raw_docs_dir) / "files" / "화면.png").exists()
 
 
 def test_existing_doc_is_kept_unless_overwrite_is_on(client, auth, studio, isolated_data):

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import frontmatter
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
@@ -20,16 +20,59 @@ from app.models.schemas import (
     DocChunkDetail,
     FeedbackRequest,
 )
+from app.pipeline import scope
+from app.pipeline.lookup.base import Principal
 from app.pipeline.retrieve import get_retriever
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
+# 사이트로 되넘길 자격. **챗봇은 이 값을 해석하지 않는다** — 그대로 실어 보내고
+# 사이트가 403 을 주면 그대로 안내한다 (개발계획서 §4.5).
+_CREDENTIAL_HEADERS = ("cookie", "authorization", "x-forwarded-user", "x-forwarded-email")
+
+
+def _principal(http: Request) -> Principal:
+    """질문한 사람의 자격을 그대로 뜬다.
+
+    **누구인지 판단하지 않는다.** 자격이 실려 있으면 라이브 경로를 열어 주고, 볼 수 있는지는
+    사이트가 정한다. 여기서 권한을 흉내 내면 두 곳의 판단이 언젠가 갈린다.
+    """
+    headers = {
+        name: value
+        for name, value in http.headers.items()
+        if name.lower() in _CREDENTIAL_HEADERS and value
+    }
+    return Principal(authenticated=bool(headers), headers=headers)
+
+
+@router.get("/projects")
+def list_projects() -> dict:
+    """챗봇 입력창 왼쪽 선택기가 쓰는 목록. **사용 중인 것만** 나간다.
+
+    관리자 목록(`/api/admin/projects`)과 달리 건수·사용 여부 같은 운영 값을 빼고 고르는 데
+    필요한 것만 준다. 자료가 하나도 없는 프로젝트도 그대로 보여 준다 — 선택지에서 빼면
+    "분명히 만들었는데 안 보인다"가 되고, 비어 있다는 것은 물어보면 바로 드러난다.
+    """
+    from app.core import projects
+
+    return {
+        "items": [
+            {"project_id": p.project_id, "name": p.name, "description": p.description}
+            for p in projects.list_projects(enabled_only=True)
+        ],
+        "default_project": projects.default_project(),
+    }
+
+
 @router.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest) -> AskResponse:
+def ask(request: AskRequest, http: Request) -> AskResponse:
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="질문을 입력해 주세요.")
-    return get_retriever().ask(request)
+    # 프로젝트를 고르지 않은 요청은 **가장 가까운 자료가 있는 프로젝트**에서 찾는다.
+    # 스트리밍 경로(`chat_stream.py`)와 같은 판단을 써야 두 입구가 다른 답을 주지 않는다.
+    with scope.chosen(request.question) as vector:
+        return get_retriever().ask(request, _principal(http), vector)
 
 
 @router.post("/support", response_model=AskResponse)

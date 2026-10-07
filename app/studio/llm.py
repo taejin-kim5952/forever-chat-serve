@@ -21,9 +21,19 @@ from app.core.logging import get_logger, log_event
 
 logger = get_logger("studio.llm")
 
-# 토큰당 글자 수. 한국어는 모델마다 1자에 1토큰을 넘기도 해서 **1.0으로 낮게 잡는다** —
-# 예산을 후하게 잡으면 잘림이 다시 조용히 돌아온다. 짧게 자르는 쪽은 최악이라도 근거가 줄 뿐이다.
-_CHARS_PER_TOKEN = 1.0
+# 토큰당 글자 수. 발췌를 얼마나 넣을 수 있는지가 이 값 하나로 정해진다.
+#
+# **2026-10-07 에 실제로 쟀다.** 우리 문서 68건을 토크나이저에 통과시키니 1토큰당
+# 평균 2.01자, 가장 빡빡한 문서(코드·영문이 많은 것)도 1.70자였다. 같은 자료를
+# `qwen3.5:4b` 에 넣었을 때는 15,710자 → 7,252 토큰(2.17자)이었다.
+#
+# 그 전에는 1.0 이었다. 안전한 쪽이지만 **창의 절반을 비워 두는** 값이라, AI 답변이
+# 읽는 근거가 실제로 넣을 수 있는 양의 절반도 안 됐다. 1.6 은 가장 빡빡한 문서(1.70)
+# 보다도 낮아 여유가 남는다 — 넘치면 Ollama 가 **조용히** 앞부분만 읽으므로 여기서
+# 후하게 잡으면 안 된다.
+#
+# 자료 성격이 크게 바뀌면(영문·코드 비중이 늘면) 다시 재야 한다.
+_CHARS_PER_TOKEN = 1.6
 # 규칙·형식 안내와 모델이 쓸 여유. 발췌에 쓸 수 있는 예산에서 미리 빼둔다.
 _PROMPT_OVERHEAD_CHARS = 1500
 
@@ -78,6 +88,7 @@ class StudioLlm:
         self.num_ctx = settings.ollama_num_ctx
         self.num_predict = settings.ollama_num_predict
         self.think = settings.ollama_think
+        self.think_num_predict = settings.ollama_think_num_predict
 
     def source_budget_chars(self) -> int:
         """프롬프트에 넣을 수 있는 발췌 길이. 컨텍스트 창에서 출력 몫과 규칙 몫을 뺀 값."""
@@ -95,15 +106,29 @@ class StudioLlm:
         )
         return text[:budget]
 
-    def chat(self, prompt: str, system: str | None = None, json_format: bool = False) -> str:
+    def chat(self, prompt: str, system: str | None = None, json_format: bool = False,
+             think: bool = False, on_think=None) -> str:
         """`json_format=True` 면 Ollama 에게 **JSON 만** 내보내게 한다.
 
         채점처럼 기계가 읽을 응답에 쓴다. 형식을 모델의 선의에 맡기지 않는다 — 형식이 깨지면
         멀쩡한 답변이 '판정 실패'로 걸러진다.
 
         추론 모델에는 이것만으로 부족해서 `/no_think` 도 함께 붙인다(위 주석).
+
+        ### `think=True` — 사고 과정을 **받는** 경우
+
+        사용자가 `추론 과정 보기` 를 켠 답변 한 건에만 쓴다. 그때는 `/no_think` 를 붙이지
+        않고 Ollama 에게 생각을 내보내게 한다. **본문과 따로 온다**(`message.thinking`) —
+        2026-08-17 에 본문을 잡아먹었던 것과 다른 점이 이것이고, 그래서 답변이 짧아지지
+        않는다. 대신 **느려진다**(측정: 12초 → 21초).
+
+        생성·채점 같은 배치 경로에서는 켜지 않는다. 항목마다 수 초씩 늘고, 거기서는 사람이
+        그 글을 읽지 않는다.
+
+        :param on_think: 생각 조각이 올 때마다 부르는 함수. 주면 **흘려보내며** 받는다 —
+            수십 초를 기다리는 동안 화면에 아무것도 없으면 멈춘 것과 구분되지 않는다.
         """
-        if _needs_no_think(self.model):
+        if _needs_no_think(self.model) and not think:
             prompt = _NO_THINK_PREFIX + prompt
 
         messages = []
@@ -111,16 +136,52 @@ class StudioLlm:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        response = self.client.chat(
-            model=self.model,
-            think=self.think,
-            messages=messages,
-            format="json" if json_format else None,
-            options={"num_ctx": self.num_ctx, "num_predict": self.num_predict},
-        )
-        content = (response["message"]["content"] or "").strip()
+        options = {"num_ctx": self.num_ctx, "num_predict": self.num_predict}
+        if think:
+            # 생각이 본문의 몫을 먹지 않게 **얹어서** 준다. 합쳐서 세기 때문이다.
+            options["num_predict"] = self.num_predict + self.think_num_predict
+        if think and on_think is not None:
+            content = self._stream(messages, options, on_think)
+        else:
+            response = self.client.chat(
+                model=self.model,
+                think=think or self.think,
+                messages=messages,
+                format="json" if json_format else None,
+                options=options,
+            )
+            content = (response["message"]["content"] or "").strip()
+
+        if not content and think:
+            # 생각만 하다 예산이 끝났다. **추론을 끄고 한 번 더 부른다** — 사용자에게는
+            # 답이 나오는 것이 생각을 보는 것보다 먼저다. 예산을 올려도 같은 입력에 같은
+            # 길이가 안 나와서(위 모듈 주석의 측정) '가끔 답이 없는' 상태가 남는다.
+            log_event(logger, "thinking overran the budget, retrying without it",
+                      model=self.model, budget=self.num_predict + self.think_num_predict)
+            return self.chat(prompt, system=system, json_format=json_format, think=False)
+
         if not content:
             raise EmptyLlmResponse(
                 f"{self.model} 이 빈 응답을 돌려줬습니다. 추론 모델이면 OLLAMA_THINK=false 를 확인하세요."
             )
         return content
+
+    def _stream(self, messages: list[dict], options: dict, on_think) -> str:
+        """생각은 조각마다 넘기고 본문은 모아서 돌려준다.
+
+        본문까지 흘려보내지 않는 이유: 답변 끝에 `사용: 1,3` 같은 **기계가 읽을 줄**이
+        붙어 있어(`app/studio/ask.py`), 다 받은 뒤에 떼어내야 한다. 조각마다 내보내면
+        그 줄이 사용자 화면에 잠깐 보였다 사라진다.
+        """
+        parts = []
+        for chunk in self.client.chat(
+            model=self.model, think=True, messages=messages, stream=True, options=options,
+        ):
+            message = chunk.get("message") or {}
+            piece = message.get("thinking")
+            if piece:
+                on_think(piece)
+            body = message.get("content")
+            if body:
+                parts.append(body)
+        return "".join(parts).strip()

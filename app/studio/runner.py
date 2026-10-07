@@ -23,6 +23,8 @@
 생성 단계에서 approved 로 넣을 수 있는 경로를 아예 만들지 않는 것이 5-1 결정의 핵심이다.
 """
 
+import contextvars
+import functools
 import threading
 import time
 from pathlib import Path
@@ -147,13 +149,24 @@ class GenerationJob:
                 started_at=_now(),
             )
 
+        # ★ **지금 컨텍스트를 스레드로 들고 간다.**
+        #
+        # 파이썬 스레드는 ContextVar 를 물려받지 않는다. 그냥 띄우면 작업 스레드 안에서는
+        # `current_project()` 가 비어 있어 **기본 팩(`data/`)의 문서로** 생성하고, 결과만
+        # 고른 프로젝트에 쌓인다. 2026-10-06 에 실제로 그랬다 — `mcp-manager` 에 API
+        # Manager 문서로 만든 QA 60건이 들어갔고, 오류는 하나도 나지 않았다.
+        #
+        # `copy_context()` 는 지금 켜져 있는 **모든** ContextVar 를 통째로 옮긴다. 프로젝트
+        # 하나만 손으로 넘기면 나중에 변수가 늘 때 같은 일이 되풀이된다.
+        context = contextvars.copy_context()
         self._thread = threading.Thread(
-            target=self._run,
-            kwargs={
-                "roles": roles, "source": source, "doc_ids": doc_ids, "questions": questions,
-                "category_id": category_id, "items_per_chunk": items_per_chunk,
-                "variant_count": variant_count, "max_items": max_items,
-            },
+            target=context.run,
+            args=(functools.partial(
+                self._run,
+                roles=roles, source=source, doc_ids=doc_ids, questions=questions,
+                category_id=category_id, items_per_chunk=items_per_chunk,
+                variant_count=variant_count, max_items=max_items,
+            ),),
             daemon=True,   # 서버를 내릴 때 배치가 종료를 막지 않도록
             name="qa-generation",
         )

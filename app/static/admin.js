@@ -28,11 +28,22 @@ function fmtTs(d){ return pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + p
 /* ------------------------------------------------------------
    서버 호출
    ------------------------------------------------------------ */
+/* 지금 보고 있는 프로젝트. 한 설치가 여러 도메인을 담습니다(API Link · API Manager · MCP).
+   **모든 요청에 이 값을 실어 보냅니다** — 호출하는 쪽마다 붙이게 하면 한 군데만 빠뜨려도
+   다른 프로젝트의 자료를 고치게 되고, 틀려도 오류가 안 나서 한참 뒤에 드러납니다.
+   쿼리가 아니라 헤더로 보내는 이유: 이미 쿼리를 쓰는 호출이 많아 문자열을 깁다 보면
+   `?` 와 `&` 를 틀립니다. */
+var PROJECT = '';
+
+function projectHeaders(){
+  return PROJECT ? { 'X-Project': PROJECT } : {};
+}
+
 var API = {
-  get: function(url){ return $.ajax({ url:url, method:'GET', dataType:'json' }); },
+  get: function(url){ return $.ajax({ url:url, method:'GET', dataType:'json', headers:projectHeaders() }); },
   send: function(method, url, body){
     return $.ajax({
-      url:url, method:method, dataType:'json',
+      url:url, method:method, dataType:'json', headers:projectHeaders(),
       contentType:'application/json; charset=utf-8',
       data: body === undefined ? undefined : JSON.stringify(body)
     });
@@ -41,7 +52,7 @@ var API = {
      processData:false 가 없으면 jQuery 가 FormData 를 문자열로 만들어 파일이 사라집니다. */
   upload: function(url, formData){
     return $.ajax({
-      url:url, method:'POST', dataType:'json',
+      url:url, method:'POST', dataType:'json', headers:projectHeaders(),
       data:formData, processData:false, contentType:false
     });
   }
@@ -271,8 +282,33 @@ function loadProfile(){
     $('#profDesc').val(p.service_desc);
     $('#profDomain').val(p.domain_intro);
     $('#profLang').val(p.language);
+    renderBrandLogo($('#brandLogoPreview').find('img').attr('src') || '');
   });
 }
+/* ---------- 로고 이미지 ----------
+   퍼블 산출물에 없는 영역입니다. 설치 전체에 하나뿐이라 프로젝트를 바꿔도 그대로입니다.
+
+   미리보기는 **서버가 주는 주소**(내용 해시가 붙어 있습니다)를 그대로 씁니다. 올린 파일을
+   브라우저에서 읽어 미리 그리면, 저장이 실패했는데도 바뀐 것처럼 보입니다. */
+function renderBrandLogo(url){
+  var $prev = $('#brandLogoPreview').empty();
+  if(url){
+    $prev.append($('<img>').attr('src', url).attr('alt', '로고'));
+    $('#brandLogoClear').prop('hidden', false);
+  } else {
+    /* 로고가 없으면 지금 글자 로고가 어떻게 보이는지 그대로 보여 줍니다. */
+    $prev.text(String($('#profOrg').val() || '').slice(0, 4));
+    $('#brandLogoClear').prop('hidden', true);
+  }
+}
+
+function loadBrandLogo(){
+  /* 있는지 없는지만 알면 됩니다. 서버가 404 를 주면 글자 로고입니다. */
+  return $.ajax({ url:'/api/brand/logo', method:'HEAD' })
+    .done(function(){ renderBrandLogo('/api/brand/logo?v=' + Date.now()); })
+    .fail(function(){ renderBrandLogo(''); });
+}
+
 function loadHistory(){
   return API.get('/api/admin/questions?limit=500&include_test=true').done(function(page){
     HISTORY = (page.items || []).map(mapHistory);
@@ -340,10 +376,29 @@ $(function(){
     $.each(String(src || '').replace(/\r\n/g,'\n').split(/\n{2,}/), function(_, block){
       var lines = block.split('\n').filter(function(l){ return l.trim() !== ''; });
       if(!lines.length) return;
-      if(/^\s*\d+\.\s/.test(lines[0])){
+      if(lines.some(function(l){ return /^#{1,6}\s/.test(l); })){
+        /* 제목. **사용자 화면(drive.js 의 `heads`)과 같은 규칙이어야 한다** — 한쪽만
+           그리면 검수자와 사용자가 같은 글을 다르게 본다(CLAUDE.md). */
+        var buf = [];
+        function flushP(){ if(buf.length){ html += '<p>' + buf.map(inline).join('<br>') + '</p>'; buf = []; } }
+        $.each(lines, function(_, l){
+          var h = /^(#{1,6})\s+(.*)$/.exec(l);
+          if(h){ flushP(); html += '<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'; }
+          else buf.push(l);
+        });
+        flushP();
+      } else if(/^\s*\d+\.\s/.test(lines[0])){
         html += '<ol>' + lines.map(function(l){ return '<li>' + inline(l.replace(/^\s*\d+\.\s/,'')) + '</li>'; }).join('') + '</ol>';
       } else if(/^\s*[-*]\s/.test(lines[0])){
         html += '<ul>' + lines.map(function(l){ return '<li>' + inline(l.replace(/^\s*[-*]\s/,'')) + '</li>'; }).join('') + '</ul>';
+      } else if(lines[0].trim().charAt(0) === '|'){
+        /* 표. **사용자 화면(drive.js)과 같은 규칙이어야 한다** — 검수자가 멀쩡해 보이는
+           것을 승인하고 사용자가 깨진 표를 보면 검수가 의미를 잃는다(CLAUDE.md).
+           2026-10-06 에 사용자 화면에만 있던 것을 여기로 맞췄다. */
+        var rows = lines.filter(function(l){ return !/^\|[\s|:-]+\|?$/.test(l.trim()); })
+          .map(function(l){ return l.trim().replace(/^\||\|$/g,'').split('|').map(function(c){ return c.trim(); }); });
+        html += '<table><thead><tr>' + rows[0].map(function(c){ return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          rows.slice(1).map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
       } else {
         html += '<p>' + lines.map(inline).join('<br>') + '</p>';
       }
@@ -420,6 +475,7 @@ $(function(){
     $('.admin_panel').removeClass('is_active');
     $('#panel_' + key).addClass('is_active');
     if(key === 'review') renderReview();
+    if(key === 'projects') renderProjectAdmin();
     if(key === 'flow') renderFlow();
     if(location.hash !== '#' + key) history.replaceState(null, '', '#' + key);
   }
@@ -438,6 +494,75 @@ $(function(){
     $('#navReviewBadge').prop('hidden', !n).text(n > 99 ? '99+' : n);
   }
 
+  /* ---------- 프로젝트 #panel_projects ----------
+     만들기·수정은 운영 행위라 **관리자 화면**에 둡니다. 사용자 화면(자료)에는 입구가
+     없습니다 — 자료를 보러 온 사람이 프로젝트를 지울 일은 없습니다.
+
+     ID 는 폴더 이름이자 주소 조각이라 **만든 뒤에는 바꾸지 못합니다.** 바꾸려면 새로
+     만들어 자료를 옮겨야 합니다. 그래서 수정에서 뺐습니다. */
+  var PROJECT_ROWS = [];
+
+  /* 이름이 `renderProjects` 가 아닌 이유: 상단 **프로젝트 선택기**가 이미 그 이름을
+     쓰고 있습니다(파일 아래쪽). 자바스크립트는 같은 이름의 함수 선언이 둘이면 뒤엣것만
+     남겨서, 겹치는 순간 이 표가 **아무 말 없이 안 그려집니다**(2026-10-07 에 겪음). */
+  function renderProjectAdmin(){
+    API.get('/api/admin/projects').done(function(r){
+      PROJECT_ROWS = (r && r.items) || [];
+      var $b = $('#projRows').empty();
+      PROJECT_ROWS.forEach(function(p){
+        var $tr = $('<tr>').attr('data-pid', p.project_id);
+        $tr.append($('<td>').append($('<code>').text(p.project_id)));
+        $tr.append($('<td>').append($('<input type="text" class="admin_input" data-f="name">').val(p.name || '')));
+        var $role = $('<select class="admin_select" data-f="role">')
+          .append($('<option value="knowledge">').text('지식'))
+          .append($('<option value="library">').text('자료실'));
+        $role.val(p.role === 'library' ? 'library' : 'knowledge');
+        $tr.append($('<td>').append($role));
+        $tr.append($('<td>').append($('<input type="text" class="admin_input" data-f="description">')
+          .attr('placeholder', '어떤 자료를 담는 프로젝트인지').val(p.description || '')));
+        $tr.append($('<td>').text(p.doc_count));
+        $tr.append($('<td>').text(p.qa_count));
+        $tr.append($('<td>').append($('<label class="admin_switch">')
+          .append($('<input type="checkbox" data-f="enabled">').prop('checked', p.enabled !== false))
+          .append($('<span>'))));
+        $tr.append($('<td>')
+          .append($('<button type="button" class="qr_pill qr_pill_teal qr_pill_sm" data-proj-save>').text('저장'))
+          .append(' ')
+          .append($('<button type="button" class="qr_pill qr_pill_outline qr_pill_sm" data-proj-del>').text('지우기')));
+        $b.append($tr);
+      });
+      $('#projEmpty').prop('hidden', PROJECT_ROWS.length > 0);
+    }).fail(function(xhr){ toast(apiError(xhr, '프로젝트 목록을 불러오지 못했습니다'), 'err'); });
+  }
+
+  $('#panel_projects').on('click', '[data-proj-save]', function(){
+    var $tr = $(this).closest('tr'), pid = $tr.data('pid');
+    var name = $.trim($tr.find('[data-f="name"]').val());
+    if(!name){ toast('이름을 비울 수 없습니다', 'err'); return; }
+    API.send('PUT', '/api/admin/projects/' + encodeURIComponent(pid), {
+      name: name,
+      description: $.trim($tr.find('[data-f="description"]').val()),
+      role: $tr.find('[data-f="role"]').val(),
+      enabled: $tr.find('[data-f="enabled"]').prop('checked')
+    }).done(function(){ toast('저장했습니다'); renderProjectAdmin(); })
+      .fail(function(xhr){ toast(apiError(xhr, '저장하지 못했습니다'), 'err'); });
+  });
+
+  /* 지울 때 **ID 를 그대로 다시 적게** 합니다(서버도 같은 값을 요구합니다). 프로젝트를
+     지우면 그 안의 자료·QA·질문 이력이 통째로 사라지는데, 목록에서 한 줄 아래를 누르는
+     실수는 너무 쉽습니다. */
+  $('#panel_projects').on('click', '[data-proj-del]', function(){
+    var pid = String($(this).closest('tr').data('pid'));
+    var typed = window.prompt('이 프로젝트의 자료·QA·질문 이력이 모두 사라집니다.\n'
+      + '지우려면 아래에 프로젝트 ID 를 그대로 적어 주세요.\n\n' + pid);
+    if(typed === null) return;
+    if($.trim(typed) !== pid){ toast('ID 가 다릅니다. 지우지 않았습니다', 'err'); return; }
+    API.send('DELETE', '/api/admin/projects/' + encodeURIComponent(pid)
+      + '?confirm=' + encodeURIComponent(pid))
+      .done(function(){ toast('지웠습니다'); renderProjectAdmin(); })
+      .fail(function(xhr){ toast(apiError(xhr, '지우지 못했습니다'), 'err'); });
+  });
+
   /* ---------- 설정 하위 탭 ---------- */
   function selectSubtab(key){
     var $t = $('.admin_subtab[data-subtab="' + key + '"]');
@@ -455,6 +580,9 @@ $(function(){
   function applyBrand(){
     var v = {
       '{organization}':String(BRAND.organization || '').slice(0, 4),
+      /* 제품 이름은 설치 단위라 프로필이 아니라 **서버가 <body> 에 박아 둔 값**입니다
+         (app/main.py). 비어 있으면 프로젝트 이름이 그 자리를 대신합니다. */
+      '{app_name}':$('body').attr('data-app-name') || BRAND.service_name || '',
       '{service_name}':BRAND.service_name || '',
       '{service_desc}':BRAND.service_desc || ''
     };
@@ -1302,6 +1430,153 @@ $(function(){
     openModal('catGroupModal');
   }
   $('#catAddGroup').on('click', function(){ openGroupModal(null); });
+
+  /* ---------- 카테고리 JSON 가져오기 · 등록규격 ------------------------------
+     퍼블 산출물에 없는 화면입니다. ③ 탭에 버튼 둘과 `#catImportModal`·`#catSpecModal` 을
+     덧붙였고, 다음 산출물을 받을 때 이 블록과 두 모달을 함께 옮기면 됩니다.
+
+     **형식을 아는 쪽은 서버 하나뿐입니다.** 화면은 텍스트를 모아 보내고 서버가 돌려준 표를
+     그리기만 합니다 — 여기서 JSON 을 해석해 트리에 끼워 넣으면, 규격이 바뀔 때 화면과 서버
+     두 곳을 고치게 되고 미리보기와 실제 반영이 조용히 어긋납니다.
+
+     파일 선택과 붙여넣기가 **같은 칸으로 모입니다.** 파일을 고르면 내용을 텍스트칸에 넣어
+     주고, 서버로는 언제나 그 텍스트만 갑니다. 올린 뒤 눈으로 확인하거나 한 줄 고칠 수도
+     있습니다.
+     --------------------------------------------------------------------------- */
+  var CAT_IMP_ST = { new:['is_new','새로'], over:['is_over','덮음'], gone:['is_excluded','삭제'] };
+
+  function catImportMode(){ return $('#catImportMode').find('input:checked').val() || 'merge'; }
+
+  function catImportReset(){
+    $('#catImportResult').prop('hidden', true);
+    $('#catImportBody').empty();
+    $('#catImportSummary').text('');
+    /* 내용이나 방식이 바뀌면 앞의 미리보기는 더 이상 그 결과가 아닙니다. */
+    $('#catImportApplyBtn').prop('disabled', true).text('반영');
+  }
+
+  $('#catSpecBtn').on('click', function(){ openModal('catSpecModal'); });
+  $('#catImportSpecBtn').on('click', function(){ openModal('catSpecModal'); });
+
+  /* 규격 모달의 AI 요청문 복사. 두 규격(카테고리·QA)이 같은 함수를 씁니다.
+     폐쇄망에서는 http 로 접속해 `navigator.clipboard` 가 막힙니다(보안 컨텍스트가 아님).
+     그때는 눈에 안 보이는 textarea 를 만들어 선택 복사로 넘어갑니다. */
+  function copyText(text, $msg){
+    $msg.text('');
+    function fallback(){
+      var $t = $('<textarea>').val(text).css({ position:'fixed', top:'-1000px' }).appendTo('body');
+      $t[0].select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+      $t.remove();
+      $msg.text(ok ? '복사했습니다' : '복사하지 못했습니다. 직접 선택해 주세요');
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ $msg.text('복사했습니다'); }, fallback);
+    } else { fallback(); }
+  }
+
+  $('#catSpecCopyBtn').on('click', function(){ copyText($('#catSpecPrompt').text(), $('#catSpecCopyMsg')); });
+
+  $('#catImportBtn').on('click', function(){
+    $('#catImportText').val('');
+    $('#catImportFileName').text('');
+    $('#catImportFileInput').val('');
+    $('#catImportMode').find('input[value="merge"]').prop('checked', true);
+    catImportReset();
+    openModal('catImportModal');
+  });
+
+  $('#catImportFileBtn').on('click', function(){ $('#catImportFileInput').val('').trigger('click'); });
+
+  $('#catImportFileInput').on('change', function(){
+    var file = (this.files || [])[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      $('#catImportText').val(String(reader.result || ''));
+      $('#catImportFileName').text(file.name);
+      catImportReset();
+    };
+    reader.onerror = function(){ toast('파일을 읽지 못했습니다', 'err'); };
+    reader.readAsText(file, 'utf-8');
+  });
+
+  $('#catImportText').on('input', catImportReset);
+  $('#catImportMode').on('change', 'input', catImportReset);
+
+  function catImportRows(rows){
+    var $body = $('#catImportBody').empty();
+    $.each(rows || [], function(_, row){
+      var st = CAT_IMP_ST[row.status] || ['is_hold', row.status];
+      $body.append('<tr>' +
+        '<td>' + (row.kind === 'group' ? '대분류' : '카테고리') + '</td>' +
+        '<td class="admin_td_ellip" style="font-family:D2Coding,Consolas,monospace;">' +
+          esc(row.category_id || row.group_id) + '</td>' +
+        '<td class="admin_td_ellip" title="' + esc(row.name || row.group_name) + '">' +
+          esc(row.name || row.group_name) + '</td>' +
+        '<td class="qr_num">' + (row.kind === 'group' ? '—' : num(row.questions)) + '</td>' +
+        '<td><span class="admin_st ' + st[0] + '">' + st[1] + '</span></td>' +
+        '<td class="admin_td_ellip" title="' + esc(row.reason) + '">' + esc(row.reason || '') + '</td></tr>');
+    });
+    $('#catImportResult').prop('hidden', !(rows || []).length);
+  }
+
+  $('#catImportPreviewBtn').on('click', function(){
+    var content = $('#catImportText').val();
+    if(!$.trim(content)){ toast('파일을 고르거나 내용을 붙여넣어 주세요', 'err'); return; }
+
+    var $btn = $(this).prop('disabled', true).text('확인 중…');
+    API.send('POST', '/api/admin/categories/import/preview', { content:content, mode:catImportMode() })
+      .done(function(res){
+        var c = res.counts || {};
+        catImportRows(res.rows);
+        $('#catImportSummary').text(
+          '새로 ' + num(c.new) + ' · 덮음 ' + num(c.over) +
+          (res.mode === 'replace' ? ' · 삭제 ' + num(c.gone) : ' · 그대로 ' + num(c.keep)) +
+          '건. 반영하면 대분류 ' + num(res.groups) + '개 · 카테고리 ' + num(res.categories) + '개가 됩니다.'
+        );
+        /* 사라지는 것이 있으면 표만으로는 지나치기 쉽습니다. 버튼 문구로도 말해 둡니다. */
+        $('#catImportApplyBtn').prop('disabled', false)
+          .text(c.gone ? '반영 (' + num(c.gone) + '건 삭제)' : '반영');
+      })
+      .fail(function(xhr){
+        catImportReset();
+        /* 서버가 '몇 번째 줄이 잘못됐다'까지 말해 줍니다. 그대로 보여 줍니다. */
+        $('#catImportSummary').text(apiError(xhr, '읽지 못했습니다'));
+        toast(apiError(xhr, '읽지 못했습니다'), 'err');
+      })
+      .always(function(){ $btn.prop('disabled', false).text('미리보기'); });
+  });
+
+  $('#catImportApplyBtn').on('click', function(){
+    var content = $('#catImportText').val();
+    var mode = catImportMode();
+    var $btn = $(this);
+
+    function run(){
+      $btn.prop('disabled', true).text('반영 중…');
+      API.send('POST', '/api/admin/categories/import', { content:content, mode:mode })
+        .done(function(res){
+          var c = res.counts || {};
+          /* 서버가 돌려준 결과로 화면을 다시 그립니다 — 화면이 임의로 낙관 반영하면
+             서버가 손질한 값(자주 찾는 주제 정리 등)이 화면에만 다르게 남습니다. */
+          mapCategories(res.store);
+          renderAll();
+          closeModal($('#catImportModal'));
+          toast('카테고리를 반영했습니다 (새로 ' + num(c.new) + ' · 덮음 ' + num(c.over) +
+                (c.gone ? ' · 삭제 ' + num(c.gone) : '') + ')', 'ok');
+        })
+        .fail(function(xhr){
+          $btn.prop('disabled', false).text('반영');
+          toast(apiError(xhr, '반영하지 못했습니다'), 'err');
+        });
+    }
+
+    if(mode === 'replace'){
+      askConfirm('카테고리를 전체 교체할까요?', '파일에 없는 카테고리는 사라집니다. 되돌리려면 다시 등록해야 합니다.', true, run);
+    } else { run(); }
+  });
   $('#catGroupSave').on('click', function(){
     var id = $.trim($('#catGroupId').val());
     var name = $.trim($('#catGroupName').val());
@@ -2164,6 +2439,7 @@ $(function(){
     $('[data-search="doc"]').toggleClass('is_noresult', !!FILTER.doc.q && !rows.length);
     $('#docBody').html(paged('doc', rows).map(function(d){
       return '<tr class="is_clickable" data-doc-id="' + d.doc_id + '">' +
+        (studio ? '<td class="admin_col_check"><input type="checkbox" data-check="doc" aria-label="선택"></td>' : '') +
         '<td class="admin_td_ellip" style="font-family:D2Coding,Consolas,monospace;">' + esc(d.doc_id) + '</td>' +
         '<td class="admin_td_ellip"><span class="admin_row_title">' + esc(d.title) + '</span></td>' +
         '<td class="admin_td_ellip">' + esc(d.category_name) + '</td>' +
@@ -2176,9 +2452,66 @@ $(function(){
     }).join(''));
     emptyState('doc', !rows.length);
     renderPager('doc', rows.length);
+    /* 다시 그리면 체크가 사라집니다(페이지 이동·검색·삭제 후). 버튼도 같이 되돌립니다 —
+       "3건 삭제"라고 적힌 버튼이 아무것도 안 골라진 표 위에 남아 있으면 안 됩니다. */
+    $('[data-check-all="doc"]').prop('checked', false);
+    syncDocSelection();
   }
+
+  /* ---------- 선택 삭제 -------------------------------------------------------
+     퍼블 산출물에 없는 영역입니다. 표의 체크박스와 `#docBulkDeleteBtn` 을 덧붙였습니다.
+
+     지우는 판단은 서버에 있습니다 — 화면은 고른 id 를 보내고 건마다 온 결과를 셀 뿐입니다.
+     한 건이 실패해도 나머지는 지워지므로, 실패한 것만 골라 알려 줍니다.
+     --------------------------------------------------------------------------- */
+  function syncDocSelection(){
+    var n = $('[data-check="doc"]:checked').length;
+    $('#docBulkDeleteBtn').prop('disabled', !n).text(n ? '선택 삭제 (' + num(n) + ')' : '선택 삭제');
+    $('#docSelCount').prop('hidden', !n).text(n ? num(n) + '건 선택' : '');
+  }
+  $('#docBody').on('change', '[data-check="doc"]', syncDocSelection);
+  /* 전체 선택은 공용 처리(`[data-check-all]`)가 행을 켜고 끕니다. 그 처리는 이벤트가
+     document 까지 올라간 뒤에 도는데, 여기서 세는 것은 그보다 먼저입니다 — 그래서 켜고
+     끄는 것을 여기서 한 번 더 합니다(같은 값이라 겹쳐도 무해합니다). */
+  $('[data-check-all="doc"]').on('change', function(){
+    $('#docBody').find('[data-check="doc"]').prop('checked', $(this).is(':checked'));
+    syncDocSelection();
+  });
+
+  $('#docBulkDeleteBtn').on('click', function(){
+    var ids = $('[data-check="doc"]:checked').map(function(){
+      return $(this).closest('tr').data('doc-id');
+    }).get();
+    if(!ids.length) return;
+
+    askConfirm(ids.length + '건을 삭제할까요?',
+      '연결된 QA의 출처 표기가 사라집니다. 되돌리려면 문서를 다시 등록해야 합니다.', true, function(){
+      var $btn = $('#docBulkDeleteBtn').prop('disabled', true).text('삭제 중…');
+      API.send('POST', '/api/admin/docs/bulk-delete', { doc_ids:ids })
+        .done(function(res){
+          if(res.failed){
+            var names = (res.items || []).filter(function(i){ return i.status === 'failed'; })
+              .map(function(i){ return i.doc_id; }).join(', ');
+            toast(num(res.deleted) + '건을 삭제했습니다. 실패 ' + num(res.failed) + '건: ' + names, 'err');
+          } else {
+            toast('문서 ' + num(res.deleted) + '건을 삭제했습니다', 'ok');
+          }
+          loadDocs().done(renderDocs); refreshFlow();
+        })
+        .fail(function(xhr){
+          $btn.prop('disabled', false);
+          syncDocSelection();
+          toast(apiError(xhr, '삭제하지 못했습니다'), 'err');
+        });
+    });
+  });
+
   $('#docSearch').on('input', function(){ FILTER.doc.q = $(this).val(); PAGE.doc = 1; renderDocs(); });
-  $('#docBody').on('click', 'tr', function(){ openDocModal($(this).data('doc-id')); });
+  $('#docBody').on('click', 'tr', function(e){
+    /* 체크박스를 누른 것은 '고른다'이지 '연다'가 아닙니다(QA 표와 같은 규칙). */
+    if($(e.target).is('input[type=checkbox]')) return;
+    openDocModal($(this).data('doc-id'));
+  });
   function openDocModal(id){
     var d = DOCS.filter(function(x){ return x.doc_id === id; })[0];
     if(!d) return;
@@ -2252,8 +2585,8 @@ $(function(){
     });
   });
 
-  /* ---------- 폴더 업로드 ----------------------------------------------------
-     퍼블 산출물에 없는 화면입니다. ⑤ 탭에 버튼과 `#docUploadModal` 을 덧붙였고, 다음
+  /* ---------- 폴더 · 파일 업로드 ---------------------------------------------
+     퍼블 산출물에 없는 화면입니다. ⑤ 탭에 버튼 둘과 `#docUploadModal` 을 덧붙였고, 다음
      산출물을 받을 때 이 블록과 모달을 함께 옮기면 됩니다(그 외 렌더 코드는 손대지 않았습니다).
 
      폴더를 **한 요청에 통째로 보내지 않습니다.** 문서 한 건마다 청킹·임베딩이 돌아 몇 초가
@@ -2288,17 +2621,26 @@ $(function(){
     /* 값을 비워야 같은 폴더를 다시 골랐을 때도 change 가 뜹니다. */
     $('#docUploadInput').val('').trigger('click');
   });
+  $('#docFileBtn').on('click', function(){ $('#docFileInput').val('').trigger('click'); });
 
-  $('#docUploadInput').on('change', function(){
-    var picked = Array.prototype.slice.call(this.files || []);
+  /* 폴더와 파일은 고르는 방법만 다르고 그 뒤는 같습니다 — 서버로 가는 요청도 한 곳입니다
+     (`POST /api/admin/docs/upload`). 갈라지는 것은 안내 문구뿐입니다. */
+  $('#docUploadInput').on('change', function(){ pickUploads(this.files, 'dir'); });
+  $('#docFileInput').on('change', function(){ pickUploads(this.files, 'file'); });
+
+  function pickUploads(fileList, source){
+    var isDir = source === 'dir';
+    var picked = Array.prototype.slice.call(fileList || []);
     if(!picked.length) return;
     /* 등록이 도는 중에 폴더를 다시 고르면 보내는 중인 목록을 갈아엎게 됩니다.
        창을 닫아도 남은 묶음은 계속 올라갑니다 — 끝날 때까지 기다렸다 다시 고르게 합니다. */
     if(uploadBusy){ toast('앞의 등록이 끝난 뒤에 다시 골라 주세요', 'err'); return; }
 
+    /* 파일을 고를 때도 확장자를 다시 봅니다 — `accept` 는 안내일 뿐이라 '모든 파일'로
+       바꿔 고르면 그대로 들어옵니다. */
     var files = picked.filter(function(f){ return UPLOAD_EXT.test(f.name); });
     if(!files.length){
-      toast('폴더에 문서 파일(.md · .markdown · .txt)이 없습니다', 'err');
+      toast((isDir ? '폴더에 ' : '') + '문서 파일(.md · .markdown · .txt)이 없습니다', 'err');
       return;
     }
 
@@ -2320,13 +2662,14 @@ $(function(){
     $('#docUploadBody').empty();
     $('#docUploadProgress').removeClass('is_shown is_err');
     $('#docUploadStartBtn').prop('disabled', false).text('등록 시작');
+    $('#docUploadTitle').text(isDir ? '폴더 등록' : '파일 등록');
     $('#docUploadSummary').text(
       '문서 ' + num(uploadQueue.length) + '건을 등록합니다' +
       (picked.length > files.length ? ' (문서가 아닌 파일 ' + num(picked.length - files.length) + '건은 제외)' : '') +
       (uploadPreSkipped.length ? ' · 이름이 겹치는 ' + num(uploadPreSkipped.length) + '건은 건너뜁니다' : '') + '.'
     );
     openModal('docUploadModal');
-  });
+  }
 
   /* ---------------------------------------------------------------------------
      QA 가져오기 (요청서 11) — #qaImportModal
@@ -2400,6 +2743,8 @@ $(function(){
   function qaImpOpen(){
     qaImpFile = null; qaImpItems = []; qaImpBusy = false;
     $('#qaImportFile').val('');
+    $('#qaImportText').val('');
+    $('#qaImportTextInfo').text('');
     $('#qaImportDrop').removeClass('is_over is_invalid');
     $('#qaImportFileInfo').prop('hidden', true);
     $('#qaImportCheckBtn').prop('disabled', true).text('내용 확인');
@@ -2416,6 +2761,47 @@ $(function(){
   }
 
   $('#qaImportBtn').on('click', qaImpOpen);
+  /* ⑥ QA 생성 탭에서도 같은 모달을 엽니다. 외부 AI로 만든 QA를 들여오는 것도 '생성'의
+     한 갈래라 그 자리에 입구를 뒀습니다 — 들여오는 규칙은 한 곳(app/qa/importer.py)에만
+     있으므로 입구가 둘이어도 동작은 하나입니다. */
+  $('#genImportBtn').on('click', qaImpOpen);
+
+  /* ---------- QA 등록 규격 ----------
+     서버를 부르지 않는 고정 안내입니다. 붙여넣기 칸 옆의 `?` 로도 열립니다. */
+  $('#qaSpecBtn, #qaImportSpecBtn').on('click', function(){ openModal('qaSpecModal'); });
+  $('#qaSpecCopyBtn').on('click', function(){ copyText($('#qaSpecPrompt').text(), $('#qaSpecCopyMsg')); });
+
+  /* ---------- 붙여넣기 ----------
+     외부 AI 화면에서 결과를 그대로 복사해 오는 경우가 많습니다. 파일로 저장했다가 다시
+     고르는 단계를 없앴습니다.
+
+     붙여넣은 내용을 **파일처럼 만들어** 같은 경로로 올립니다. 서버에 텍스트용 입구를 따로
+     내면 파일 경로와 판단이 두 벌이 되고, 언제 어긋났는지 모르게 갈라집니다. */
+  function pastedFile(text){
+    var name = '붙여넣기.json';
+    try {
+      return new File([text], name, { type:'application/json' });
+    } catch(e){
+      /* File 생성자를 못 쓰는 브라우저. Blob 에 이름만 붙여 씁니다 —
+         FormData 로 보낼 때 파일 이름은 따로 넘기므로 이것으로 충분합니다. */
+      var blob = new Blob([text], { type:'application/json' });
+      blob.name = name;
+      return blob;
+    }
+  }
+
+  $('#qaImportText').on('input', function(){
+    var text = $.trim($(this).val());
+    if(!text){
+      $('#qaImportTextInfo').text('');
+      /* 파일을 골라 둔 상태에서 붙여넣기를 지우면 파일이 다시 살아납니다. */
+      if(!($('#qaImportFile')[0] || {}).files || !$('#qaImportFile')[0].files.length) qaImpSetFile(null);
+      else qaImpSetFile($('#qaImportFile')[0].files[0]);
+      return;
+    }
+    $('#qaImportTextInfo').text(num(text.length) + '자 붙여넣음 · ');
+    qaImpSetFile(pastedFile(text));
+  });
 
   $('#qaImportHelp').on('click', function(){
     var open = $('#qaImportHelpBox').prop('hidden');
@@ -3226,6 +3612,109 @@ $(function(){
 
   /* 로그인 상태를 먼저 확인한다.
      로그인 전에 데이터를 부르면 401이 여섯 번 나면서 로그인 모달이 여러 번 떠 보인다. */
+  /* ---------- 프로젝트 ----------------------------------------------------
+     퍼블 산출물에 없는 영역입니다. 머리의 선택기와 `#projectModal` 을 덧붙였습니다.
+
+     고른 프로젝트는 **브라우저에 기억**합니다. 새로고침마다 첫 프로젝트로 돌아가면,
+     문서를 올리다 새로고침한 사람이 엉뚱한 프로젝트에 올립니다.
+
+     프로젝트가 하나 이하면 선택기를 통째로 숨깁니다 — 단일 설치(지금 운영)에서는 고를
+     것이 없고, 빈 선택기는 "뭘 골라야 하지"만 만듭니다.
+     ------------------------------------------------------------------------- */
+  var PROJECT_KEY = 'admin.project';
+
+  function renderProjects(res){
+    var items = (res && res.items) || [];
+    var $sel = $('#projectSel').empty();
+    $.each(items, function(_, p){
+      $sel.append($('<option>').val(p.project_id).text(
+        p.name + (p.enabled ? '' : ' (중지)') + ' · 문서 ' + num(p.doc_count)));
+    });
+    /* 기억해 둔 프로젝트가 지워졌을 수 있습니다. 그때는 서버가 정한 기본값으로 갑니다. */
+    var ids = items.map(function(p){ return p.project_id; });
+    if(ids.indexOf(PROJECT) < 0) PROJECT = (res && res.default_project) || ids[0] || '';
+    $sel.val(PROJECT);
+    $('#projectWrap').prop('hidden', items.length <= 1);
+  }
+
+  function loadProjects(){
+    try { PROJECT = localStorage.getItem(PROJECT_KEY) || ''; } catch(e){ PROJECT = ''; }
+    return API.get('/api/admin/projects').done(renderProjects);
+  }
+
+  $('#projectSel').on('change', function(){
+    PROJECT = $(this).val() || '';
+    try { localStorage.setItem(PROJECT_KEY, PROJECT); } catch(e){}
+    /* 프로젝트가 바뀌면 화면의 모든 값이 남의 것입니다. 통째로 다시 받습니다. */
+    reloadAll().done(function(){
+      toast($('#projectSel option:selected').text().split(' · ')[0] + ' 로 바꿨습니다', 'ok');
+    });
+  });
+
+  /* ---------- 로고 이미지 올리기·지우기 ---------- */
+  $('#brandLogoPick').on('click', function(){ $('#brandLogoFile').val('').trigger('click'); });
+
+  $('#brandLogoFile').on('change', function(){
+    var file = (this.files || [])[0];
+    if(!file) return;
+    var form = new FormData();
+    form.append('file', file, file.name);
+    $('#brandLogoMsg').text(' · 올리는 중…');
+    API.upload('/api/admin/brand/logo', form)
+      .done(function(res){
+        renderBrandLogo(res.logo_url || '');
+        $('#brandLogoMsg').text('');
+        /* 헤더의 로고는 서버가 박아 내린 것이라 새로고침해야 바뀝니다. 그 사실을 알려
+           주지 않으면 "설정에서는 바뀌었는데 위쪽은 그대로"로 보입니다. */
+        toast('로고를 올렸습니다. 새로고침하면 화면 위쪽에도 반영됩니다', 'ok');
+      })
+      .fail(function(xhr){
+        $('#brandLogoMsg').text('');
+        toast(apiError(xhr, '로고를 올리지 못했습니다'), 'err');
+      });
+  });
+
+  $('#brandLogoClear').on('click', function(){
+    askConfirm('로고 이미지를 지울까요?', '지우면 조직 글자 배지로 돌아갑니다.', true, function(){
+      API.send('DELETE', '/api/admin/brand/logo')
+        .done(function(){
+          renderBrandLogo('');
+          toast('로고를 지웠습니다. 새로고침하면 화면 위쪽에도 반영됩니다', 'ok');
+        })
+        .fail(function(xhr){ toast(apiError(xhr, '지우지 못했습니다'), 'err'); });
+    });
+  });
+
+  /* 조직 글자를 고치면 글자 로고 미리보기도 따라 바뀝니다(이미지가 없을 때만). */
+  $('#profOrg').on('input', function(){
+    if(!$('#brandLogoPreview').find('img').length) renderBrandLogo('');
+  });
+
+  $('#projectNewBtn').on('click', function(){
+    $('#projectId').val(''); $('#projectName').val(''); $('#projectDesc').val('');
+    openModal('projectModal');
+    $('#projectId').trigger('focus');
+  });
+
+  $('#projectSaveBtn').on('click', function(){
+    var id = $.trim($('#projectId').val());
+    if(!id){ toast('프로젝트 ID를 입력해 주세요', 'err'); return; }
+
+    var $btn = $(this).prop('disabled', true).text('만드는 중…');
+    API.send('POST', '/api/admin/projects', {
+      project_id:id, name:$.trim($('#projectName').val()), description:$.trim($('#projectDesc').val())
+    })
+      .done(function(created){
+        closeModal($('#projectModal'));
+        toast('프로젝트를 만들었습니다 — 이제 문서와 카테고리를 넣어 주세요', 'ok');
+        PROJECT = created.project_id;
+        try { localStorage.setItem(PROJECT_KEY, PROJECT); } catch(e){}
+        loadProjects().done(function(){ reloadAll(); });
+      })
+      .fail(function(xhr){ toast(apiError(xhr, '만들지 못했습니다'), 'err'); })
+      .always(function(){ $btn.prop('disabled', false).text('만들기'); });
+  });
+
   function boot(){
     /* 편집기는 두 화면이 같은 템플릿을 심어 씁니다. 먼저 심어 두어야 렌더가 붙습니다. */
     mountEditor('qa'); mountEditor('rev');
@@ -3235,7 +3724,9 @@ $(function(){
     selectTab('flow');
     API.get('/api/admin/session').done(function(s){
       if(!s.authenticated){ openAuth('initial'); return; }
-      reloadAll();
+      /* 프로젝트를 **먼저** 정하고 나머지를 받습니다. 순서가 바뀌면 첫 화면이 남의
+         프로젝트 자료로 그려졌다가 바뀝니다. */
+      loadProjects().always(function(){ reloadAll(); loadBrandLogo(); });
     }).fail(function(){ openAuth('initial'); });
 
     if(location.hash){

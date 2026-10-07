@@ -14,8 +14,12 @@ from app.core import jobs
 from app.core.auth import require_admin
 from app.core.config import get_settings, is_studio
 from app.core.logging import get_logger, log_event
+from app.ingestion import doc_files
 from app.ingestion.doc_upload import MAX_FILES_PER_REQUEST, UploadItem, register_uploads
 from app.models.schemas import (
+    DocBulkDeleteItem,
+    DocBulkDeleteRequest,
+    DocBulkDeleteResponse,
     DocCreateRequest,
     DocDetail,
     DocSaveRequest,
@@ -53,11 +57,12 @@ def _doc_path(doc_id: str) -> Path:
 @router.get("", response_model=list[DocSummary])
 def list_docs() -> list[DocSummary]:
     index = get_retriever().doc_index
-    linked: dict[str, int] = {}
+    qa_links: dict[str, int] = {}
     for item in qa_store.load_qa():
         for doc_id in item.source_doc_ids:
-            linked[doc_id] = linked.get(doc_id, 0) + 1
+            qa_links[doc_id] = qa_links.get(doc_id, 0) + 1
 
+    linked, loose = doc_files.pairs()
     summaries = []
     for path in sorted(_docs_dir().glob("*.md")):
         post = frontmatter.load(path)
@@ -68,9 +73,30 @@ def list_docs() -> list[DocSummary]:
             category=post.get("category", ""),
             updated=str(post.get("updated", "")),
             chunk_count=index.count_chunks(doc_id),
-            linked_qa_count=linked.get(doc_id, 0),
+            linked_qa_count=qa_links.get(doc_id, 0),
+            **_file_fields(linked.get(doc_id) or None),
+        ))
+
+    # 본문(`.md`) 없이 원본만 올라온 문서. **숨기지 않는다** — 검색에 걸리지 않는 상태를
+    # 목록에서 보여줘야 "올렸는데 AI가 모른다"의 원인을 사람이 짚을 수 있다.
+    for name, file_path in sorted(loose.items()):
+        summaries.append(DocSummary(
+            doc_id=file_path.stem, title=file_path.stem, chunk_count=0,
+            linked_qa_count=qa_links.get(file_path.stem, 0), **_file_fields([file_path]),
         ))
     return summaries
+
+
+def _file_fields(paths: list | None) -> dict:
+    """`DocSummary` 의 원본 칸. 없으면 빈 값 — 화면이 그것으로 `색인 안 됨` 을 판단한다.
+    여럿이면 **대표 하나**를 적고 크기는 합계로 둔다."""
+    if not paths:
+        return {}
+    return {
+        "file_kind": doc_files.kind_of(paths[0].suffix),
+        "file_name": paths[0].name,
+        "file_bytes": sum(p.stat().st_size for p in paths),
+    }
 
 
 @router.get("/{doc_id}", response_model=DocDetail)
@@ -121,7 +147,7 @@ async def upload_docs(
 
     started = jobs.now()
     results = register_uploads(items, index=get_retriever().doc_index, overwrite=overwrite)
-    counts = {"created": 0, "updated": 0, "skipped": 0, "failed": 0}
+    counts = {"created": 0, "updated": 0, "attached": 0, "skipped": 0, "failed": 0}
     for result in results:
         counts[result.status] = counts.get(result.status, 0) + 1
 
@@ -143,11 +169,59 @@ def _upload_summary(counts: dict) -> str:
     parts = [f"{counts.get('created', 0)}건 등록"]
     if counts.get("updated"):
         parts.append(f"{counts['updated']}건 갱신")
+    if counts.get("attached"):
+        parts.append(f"원본 {counts['attached']}건")
     if counts.get("skipped"):
         parts.append(f"{counts['skipped']}건 건너뜀")
     if counts.get("failed"):
         parts.append(f"{counts['failed']}건 실패")
     return " · ".join(parts)
+
+
+@router.post("/bulk-delete", response_model=DocBulkDeleteResponse)
+def bulk_delete_docs(request: DocBulkDeleteRequest) -> DocBulkDeleteResponse:
+    """고른 문서를 한 번에 지운다 (탭 ⑤ 목록의 체크박스).
+
+    **한 건이 실패해도 멈추지 않는다.** 열 건을 골랐는데 세 번째에서 멈추면 무엇이
+    지워졌는지 사람이 알 수 없고, 다시 누르기도 겁난다. 건마다 결과를 따로 돌려준다.
+
+    `DELETE` 가 아니라 `POST` 인 이유: 목록을 본문에 실어야 하는데 `DELETE` 의 본문은
+    중간 프록시가 버리기도 한다. QA 일괄 작업(`POST /api/admin/qa/bulk`)과 같은 모양이다.
+
+    삭제 순서는 **파일 먼저, 벡터 다음**이다(`app/api/admin_qa.py` 와 같은 규칙). 벡터를
+    먼저 지우면 파일 삭제가 실패했을 때 목록에는 있는데 검색에서만 사라진 문서가 남는다.
+    """
+    _require_studio()
+
+    items: list[DocBulkDeleteItem] = []
+    index = get_retriever().doc_index
+    for doc_id in dict.fromkeys(request.doc_ids):      # 같은 id 가 두 번 와도 한 번만
+        path = _doc_path(doc_id)
+        if not path.exists():
+            # 본문이 없고 원본만 있는 문서(목록의 `색인 안 됨`). 지울 길이 없으면 목록에서
+            # 치울 수가 없다.
+            if doc_files.remove(doc_id):
+                items.append(DocBulkDeleteItem(doc_id=doc_id, status="deleted"))
+            else:
+                items.append(DocBulkDeleteItem(doc_id=doc_id, status="failed", reason="문서를 찾을 수 없습니다"))
+            continue
+        # 묶인 원본은 **본문을 지우기 전에** 잡아 둔다. 지우고 나면 앞머리를 읽을 수
+        # 없어 무엇이 묶여 있었는지 알 수 없다.
+        originals = doc_files.find_all(doc_id)
+        try:
+            path.unlink()
+            doc_files.remove_orphans(originals)
+            index.delete_doc(doc_id)
+        except OSError as exc:
+            # 파일이 열려 있거나 권한이 없는 경우(리눅스에서 chown 을 안 맞춘 설치가 그렇다).
+            items.append(DocBulkDeleteItem(doc_id=doc_id, status="failed", reason=str(exc)))
+            continue
+        items.append(DocBulkDeleteItem(doc_id=doc_id, status="deleted"))
+
+    deleted = sum(1 for i in items if i.status == "deleted")
+    failed = len(items) - deleted
+    log_event(logger, "docs bulk deleted", requested=len(request.doc_ids), deleted=deleted, failed=failed)
+    return DocBulkDeleteResponse(items=items, deleted=deleted, failed=failed)
 
 
 @router.put("/{doc_id}", response_model=DocSaveResponse)
@@ -168,7 +242,9 @@ def delete_doc(doc_id: str) -> DocSaveResponse:
     path = _doc_path(doc_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+    originals = doc_files.find_all(doc_id)
     path.unlink()
+    doc_files.remove_orphans(originals)
     get_retriever().doc_index.delete_doc(doc_id)
     log_event(logger, "doc deleted", doc_id=doc_id)
     return DocSaveResponse(doc_id=doc_id, chunks_created=0, status="deleted")

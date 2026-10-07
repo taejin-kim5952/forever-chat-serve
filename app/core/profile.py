@@ -82,11 +82,19 @@ class Profile(BaseModel):
         return self.language in _LANGUAGE_RULES
 
     def template_values(self) -> dict[str, str]:
-        """화면 치환에 쓸 값들(`data-brand` 포맷 문자열의 자리표시자)."""
+        """화면 치환에 쓸 값들(`data-brand` 포맷 문자열의 자리표시자).
+
+        `app_name`·`app_logo` 는 **설치 단위**라 프로필이 아니라 설정(`.env`)에서 온다.
+        프로젝트마다 달라지는 값(`service_name`)과 한 화면에 같이 나가므로 여기서 함께 낸다 —
+        화면이 두 곳에 물어보게 하면 하나가 늦게 와서 제목이 깜빡인다.
+        """
+        settings = get_settings()
         return {
-            "organization": self.logo_text(),
+            "organization": (settings.app_logo or "").strip()[:4] or self.logo_text(),
             # 로고가 아닌 곳(본문 등)에서 자르지 않은 조직명이 필요할 때.
             "organization_full": self.organization,
+            # 제품 이름. 비워 두면 프로젝트 이름이 그 자리를 대신한다(기존 설치 동작).
+            "app_name": (settings.app_name or "").strip() or self.service_name,
             "service_name": self.service_name,
             "service_desc": self.service_desc,
         }
@@ -106,9 +114,15 @@ def load_profile() -> Profile:
     """매번 파일을 다시 읽는다 — `runtime_config` 와 같은 이유로 재시작 없이 반영된다.
 
     화면 렌더와 생성 배치 시작 시점에만 불리므로 요청당 비용이 아니다.
+
+    출처는 **`profile.json` > `pack.json` 의 profile > 코드 기본값** 순이다.
+    파일이 매니페스트보다 위인 이유는, 관리자 화면(설정 → 납품처)이 저장하는 곳이
+    파일이기 때문이다 — 화면에서 고친 값을 팩이 되돌리면 안 된다.
     """
     data = read_json(Path(get_settings().profile_file))
     if data is None:
+        data = _pack_profile()
+    if not data:
         return Profile()
     try:
         return Profile(**data)
@@ -117,3 +131,19 @@ def load_profile() -> Profile:
         # 조용히 넘어가지는 않는다 — 브랜드가 기본값으로 나오는 이유가 로그에 남아야 한다.
         log_event(logger, "profile file unreadable — using defaults", error=str(exc))
         return Profile()
+
+
+def _pack_profile() -> dict:
+    """`pack.json` 의 profile 절. 매니페스트가 없거나 깨져 있으면 빈 값이다.
+
+    **여기서 터지면 안 된다.** 팩이 잘못된 경우는 기동 때 `load_pack()` 이 막는 몫이고,
+    이 함수는 화면을 그리는 길목에 있다 — 브랜드 하나 때문에 화면이 안 뜨면 곤란하다.
+    """
+    try:
+        from app.core.pack import load_pack
+
+        profile = load_pack().profile
+        return profile if isinstance(profile, dict) else {}
+    except Exception as exc:  # noqa: BLE001 - 어떤 이유로든 화면은 떠야 한다
+        log_event(logger, "pack profile unreadable — using defaults", error=str(exc))
+        return {}

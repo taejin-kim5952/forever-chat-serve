@@ -4,9 +4,13 @@
 을 다시 누르면 "이미 18100 포트에서 실행 중"만 뜨고 새 코드가 안 올라간다. 그때 쓰는 것이 이
 스크립트다.
 
-**18100 포트를 잡고 있는 프로세스만** 끈다. 파이썬 프로세스를 이름으로 찾아 끄면 관계없는
-작업(생성 배치, 다른 프로젝트)까지 같이 죽는다. `--reload` 로 띄우면 감시 프로세스와 서버
-프로세스가 부모-자식으로 두 개이므로 `taskkill /T` 로 자식까지 함께 끝낸다.
+**그 포트를 잡고 있는 프로세스만** 끈다. 파이썬 프로세스를 이름으로 찾아 끄면 관계없는
+작업(생성 배치, 다른 프로젝트)까지 같이 죽는다. 팩마다 포트가 다르므로 더욱 그렇다 —
+MCP 창을 닫으려다 API Manager 까지 내려가면 안 된다. `--reload` 로 띄우면 감시 프로세스와
+서버 프로세스가 부모-자식으로 두 개이므로 `taskkill /T` 로 자식까지 함께 끝낸다.
+
+    python scripts/stop.py                 18100 (기본)
+    python scripts/stop.py --port 18101    팩마다 다른 포트
 
 인코딩 주의: 출력을 파일로 넘기면 파이썬이 cp949 로 인코딩하다 죽을 수 있어 UTF-8 로 고정한다
 (`scripts/launch.py` 와 같은 이유).
@@ -18,7 +22,18 @@ import subprocess
 import sys
 import time
 
-PORT = 18100
+
+def parse_port(argv: list[str]) -> int:
+    """`stop.py [--port 18101]`. 안 주면 기본 포트 — 기존 `stop.bat` 이 그대로 돌아야 한다."""
+    if "--port" in argv:
+        try:
+            return int(argv[argv.index("--port") + 1])
+        except (IndexError, ValueError):
+            pass
+    return 18100
+
+
+PORT = parse_port(sys.argv[1:])
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -60,7 +75,7 @@ def listening_pids() -> list[str]:
 def main() -> int:
     say()
     say(" ============================================================")
-    say("  API Manager 도우미 - 서버 종료")
+    say(f"  openapi-chat-serve - 서버 종료  (포트 {PORT})")
     say(" ============================================================")
     say()
 

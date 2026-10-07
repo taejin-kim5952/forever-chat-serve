@@ -25,6 +25,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core import config as config_module             # noqa: E402
 from app.core.config import Settings, get_settings   # noqa: E402
 
 REAL_DATA = Path(__file__).resolve().parents[1] / "data"
@@ -79,6 +80,15 @@ def isolated_data(tmp_path, monkeypatch):
     overrides = {
         # 모드를 고정한다. studio 가 필요한 테스트는 `is_studio` 를 갈아 끼운다.
         "app_mode": "serve",
+        # 팩·런타임 뿌리. 아래 개별 경로도 그대로 두는 이유는, 이 둘만 바꿔도 파생되지만
+        # **직접 준 값이 이기는** 규칙에 기대면 나중에 파생 대상이 바뀌었을 때 조용히 새기 때문이다.
+        "pack_dir": str(tmp_path / "pack"),
+        "var_dir": str(tmp_path / "var"),
+        # 프로젝트 여러 벌의 뿌리. 실제 `packs/` 를 가리키면 테스트가 운영 프로젝트를 만든다.
+        "projects_dir": str(tmp_path / "packs"),
+        "projects_var_dir": str(tmp_path / "projects-var"),
+        # 로고 이미지가 실제 `data/brand/` 에 저장되면 테스트가 운영 로고를 덮어쓴다.
+        "brand_dir": str(tmp_path / "brand"),
         "chroma_persist_dir": str(tmp_path / "chroma"),
         "qa_index_file": str(tmp_path / "qa_index.json"),
         "categories_file": str(tmp_path / "categories.json"),
@@ -117,7 +127,14 @@ def isolated_data(tmp_path, monkeypatch):
         if (name.endswith("_file") or name.endswith("_dir")) and not str(value).startswith(str(tmp_path))
     )
     assert not leaked, f"테스트 격리 누락 — 실제 경로를 가리키는 설정: {', '.join(leaked)}"
-    monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
+    # 프로젝트를 고른 요청은 **그 프로젝트의 경로**를 봐야 한다. 격리된 설정을 고정으로
+    # 돌려주면 프로젝트 전환이 테스트에서만 일어나지 않아, 섞이는 버그를 못 잡는다.
+    # 뿌리는 여전히 임시 폴더라 격리는 그대로다(`projects_dir` 이 tmp_path 안이다).
+    def scoped_settings():
+        project = config_module.current_project()
+        return config_module._project_settings(settings, project) if project else settings
+
+    monkeypatch.setattr("app.core.config.get_settings", scoped_settings)
     # 모듈마다 `from app.core.config import get_settings` 로 **자기 이름공간에 복사**해 두므로
     # 위 한 줄로는 부족하다. 예전에는 모듈 이름을 손으로 적어 뒀는데, 새 모듈을 만들고 목록에
     # 넣는 것을 잊으면 그 모듈만 조용히 실제 `.env`·실제 `data/` 를 본다. 실제로 `app.api.
@@ -125,7 +142,7 @@ def isolated_data(tmp_path, monkeypatch):
     # 어긋났다. 그래서 목록 대신 **이미 불러온 app.* 모듈을 훑어서** 전부 갈아 끼운다.
     for name, module in list(sys.modules.items()):
         if name.startswith("app.") and hasattr(module, "get_settings"):
-            monkeypatch.setattr(f"{name}.get_settings", lambda: settings, raising=False)
+            monkeypatch.setattr(f"{name}.get_settings", scoped_settings, raising=False)
 
     Path(overrides["raw_docs_dir"]).mkdir(parents=True, exist_ok=True)
 

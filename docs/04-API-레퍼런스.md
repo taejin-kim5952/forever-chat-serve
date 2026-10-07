@@ -117,6 +117,38 @@ curl -u admin:비밀번호 http://localhost:18100/api/admin/qa
 
 ---
 
+## 1-1. 프로젝트 (한 설치가 여러 도메인을 담을 때)
+
+한 서버가 'API Link' · 'API Manager' · 'MCP' 를 함께 서비스합니다. 프로젝트의 실체는
+**팩 폴더 하나**(`packs/<id>/` + `var/<id>/`)이고, 문서·카테고리·QA·질문 이력이 전부
+그 안에서 갈립니다.
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| GET | `/api/projects` | 챗봇 선택기용 — 사용 중인 것만 |
+| GET | `/api/admin/projects` | 관리자 목록 — 중지한 것까지, 문서·QA 건수 포함 |
+| POST | `/api/admin/projects` | 만들기 (**studio**) |
+| PUT | `/api/admin/projects/{project_id}` | 이름·설명·사용 여부·순서 (**studio**) |
+| DELETE | `/api/admin/projects/{project_id}?confirm=<id>` | 지우기 — **되돌릴 수 없음** (**studio**) |
+
+### 어느 요청이 어느 프로젝트를 보는가
+
+```
+?project=mcp-manager    쿼리  (스크립트·테스트가 쓰는 길)
+X-Project: mcp-manager  헤더  (화면이 쓰는 길)
+```
+
+`app/api/project_context.py` 가 들어오는 자리에서 **한 번** 정하고, 경로를 읽는 11개 파일은
+그대로 둡니다 — 전부 `get_settings()` 를 거치므로 그 함수가 지금 프로젝트의 설정을 돌려주면
+나머지 코드는 바뀐 줄도 모릅니다. 엔드포인트마다 인자를 넘기게 고치면 한 군데만 빠뜨려도
+**다른 프로젝트의 파일을 조용히 읽습니다.**
+
+없는 프로젝트를 주면 **400** 입니다. 조용히 기본 프로젝트로 떨어뜨리지 않습니다 — 오타 하나로
+남의 문서를 지우거나 QA를 승인하는 일이 생깁니다. 아무것도 안 주면 목록의 첫 프로젝트를 보고,
+프로젝트가 하나도 없으면(= `PACK_DIR` 로 띄운 단일 설치) 예전과 똑같이 동작합니다.
+
+---
+
 ## 2. 상태 확인
 
 | 메서드 | 경로 | 설명 |
@@ -211,6 +243,12 @@ curl -u admin:비밀번호 -X POST \
 | POST | `/api/admin/docs` | 새 문서 |
 | PUT | `/api/admin/docs/{doc_id}` | 수정 |
 | DELETE | `/api/admin/docs/{doc_id}` | 삭제 |
+| POST | `/api/admin/docs/bulk-delete` | 여러 건 삭제 — 목록에서 체크한 것 |
+
+`bulk-delete` 는 `{"doc_ids": [...]}` 를 받고 **건마다 결과**(`deleted` / `failed` + 사유)를
+돌려줍니다. 한 건이 실패해도 나머지는 지웁니다 — 열 건을 골랐는데 중간에서 멈추면 무엇이
+지워졌는지 알 수 없기 때문입니다. `DELETE` 가 아니라 `POST` 인 이유는 목록을 본문에 실어야
+하는데 `DELETE` 의 본문은 중간 프록시가 버리기도 해서입니다(QA 일괄 작업과 같은 모양).
 
 serve 모드에서는 **403**입니다. 문서 편집은 스튜디오에서 하고 결과 파일을 배포한다는
 전제입니다.
@@ -240,12 +278,22 @@ serve 모드에서는 **403**입니다. 문서 편집은 스튜디오에서 하�
 | POST | `/api/admin/settings/reset` | 기본값으로 |
 | GET | `/api/admin/categories` | 카테고리 전체 (미사용 포함) |
 | PUT | `/api/admin/categories` | 카테고리 저장 |
+| POST | `/api/admin/categories/import/preview` | JSON 가져오기 — **계산만**, 저장하지 않음 |
+| POST | `/api/admin/categories/import` | JSON 가져오기 — 반영 |
 
 `PUT /settings` 는 **`related_docs_floor < qa_match_threshold` 를 서버가 강제합니다.**
 역전되면 `related_docs` 구간이 사라져 전부 `unresolved` 로 떨어지기 때문입니다.
 
 `PUT /categories` 는 `quick_category_ids` 도 함께 받습니다. 최대 6개이고 존재하지 않는
 카테고리 ID면 422입니다.
+
+`/categories/import` 은 파일 내용을 **텍스트 한 덩어리**(`content`)로 받습니다 — 화면의
+파일 선택과 붙여넣기가 같은 칸으로 모이기 때문입니다. `mode` 는 `merge`(기본, 지우지
+않음) 또는 `replace`(파일에 없는 것은 삭제)이고, 미리보기와 반영이 **같은 판단**
+(`app/core/category_import.py` 의 `_plan`)을 씁니다 — 다르면 확인 절차가 의미를 잃습니다.
+형식 오류는 400 이고 `detail` 에 **어디를 고쳐야 하는지**가 한국어로 들어갑니다.
+규격은 관리자 화면의 `카테고리등록규격` 모달과 같은 내용이며, 예시가 실제로 통과하는지는
+`test_admin_screen.py` 가 지킵니다.
 
 ---
 
@@ -301,6 +349,53 @@ serve 모드에서 studio 전용 칸(초안·품질)은 `off` 입니다.
 
 ---
 
+## 8-1. 스튜디오 · AI 답변 (챗봇의 `AI 답변` 스위치, studio 전용)
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| POST | `/api/studio/ask` | 문서에서 찾아 AI가 정리 + 참고 자료 |
+
+챗봇 화면의 스위치를 켜면 `POST /api/ask` 대신 이곳으로 갑니다.
+
+```
+스위치 끔 → /api/ask         검수된 QA 에서만 (운영과 같은 경로)
+스위치 켬 → /api/studio/ask  문서 검색 → grounded_answer → 참고 자료와 함께
+```
+
+`{"question": "...", "category_id": null}` 를 받고 `result_type` 은 셋입니다.
+
+| `result_type` | 언제 | 무엇이 들어 있나 |
+| --- | --- | --- |
+| `ai_answer` | 근거를 찾아 답을 만듦 | `answer` + `related_docs` + `model` |
+| `related_docs` | 문서는 찾았지만 **답을 못 만듦** | `related_docs` 만 |
+| `unresolved` | 문서가 임계값에 못 미침 | `message` |
+
+**관리자 인증이 없습니다.** 챗봇 화면에는 로그인이 없기 때문이고, 대신 `APP_MODE=studio`
+에서만 열립니다(운영은 403). studio 는 사내 작업 PC라는 전제가 그 안전장치입니다.
+
+### 찾는 것은 임베딩, 고르는 것은 AI
+
+```
+질문 ─임베딩─→ 후보 8건 ──→ AI ─→ 실제로 쓴 발췌만 인용 ─→ 답변 + 그 발췌들
+               (0.03초)        (질문과 관계없는 것은 뺀다)
+```
+
+후보 수는 `AI_ANSWER_SOURCE_COUNT`(기본 8)이고 **화면 카드 수(`related_docs_count`, 3)와
+일부러 다릅니다.** 3건만 주면 4번째로 걸린 문서에 답이 있어도 AI 는 본 적이 없게 됩니다.
+`related_docs` 에 나가는 것은 AI 가 `사용:` 줄로 밝힌 발췌뿐이고, 번호를 못 읽었으면 유사도
+상위 3건으로 떨어집니다 — 후보 8건을 전부 카드로 내보내면 무관한 카드가 여덟 장 뜹니다.
+
+2026-09-01 에 반대로도 해 봤습니다. 문서 목차(제목 171개)를 통째로 주고 AI 에게 읽을 절을
+고르게 했더니 **3건 중 2건을 헛짚고 9.4초**가 걸렸습니다(임베딩은 0.03초). 제목만 보고 찍기
+때문입니다. 문서 전체(api-manager 10만 자)는 컨텍스트 예산(5,668자)의 19배라 애초에 못 넣습니다.
+
+지키는 것 셋 — ① QA 인덱스를 보지 않습니다(켜면 AI 정리, 끄면 검수된 답변. 섞으면 화면을
+보는 사람이 어느 쪽인지 알 수 없습니다) ② 근거가 없으면 답하지 않습니다(생성 경로와 **같은**
+근거 판정) ③ **질문 이력에 남기지 않습니다** — 검수자의 시험 질문이 '무엇을 자주 묻는가'를
+오염시키면 안 됩니다. LLM 이 죽어 있어도 `related_docs` 로 떨어질 뿐 오류가 아닙니다.
+
+---
+
 ## 9. 스튜디오 · QA 생성 (탭 ⑥, studio 전용)
 
 수십 분이 걸리는 작업이라 시작·폴링·중지가 나뉘어 있습니다.
@@ -339,7 +434,7 @@ serve 모드에서 studio 전용 칸(초안·품질)은 `off` 입니다.
 
 | 경로 | 파일 |
 | --- | --- |
-| `/` | `app/static/chat.html` |
+| `/` | `app/static/drive.html` |
 | `/admin` | `app/static/admin.html` — `<body data-mode>` 와 브랜드(`data-brand`)를 서버가 치환 |
 | `/static/*` | 정적 리소스 |
 | `/docs` | FastAPI 자동 API 문서 |

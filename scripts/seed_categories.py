@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "퍼블" / "chat.js"
+SOURCE = ROOT / "퍼블" / "chat.js"   # 1회용 — 카테고리를 뽑아낸 옛 산출물
 TARGET = ROOT / "data" / "categories.json"
 
 

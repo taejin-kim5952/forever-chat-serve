@@ -20,6 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.ingestion.doc_index import DocIndex
+from app.studio import generate
 from app.main import app
 from app.qa import store as qa_store
 from app.qa.index import QaIndex
@@ -626,3 +627,163 @@ def test_empty_llm_response_fails_the_job(client, auth, studio, doc):
     assert progress["status"] == "failed"
     # 화면에 그대로 뜨는 문구다. 여기에 원인 힌트가 없으면 검수자가 프롬프트부터 고치기 시작한다.
     assert "OLLAMA_THINK" in progress["error"]
+
+
+# ── 응답 형식 흔들림 ─────────────────────────────────────────────────────────
+
+
+def test_answer_without_the_label_is_still_an_answer():
+    """`근거: 있음` 만 쓰고 `답변:` 라벨을 빼먹는 모델이 있다 (2026-09-01 `qwen3.5:4b`).
+
+    예전에는 이것을 '근거 없음'으로 버렸다. 멀쩡한 답이 조용히 사라지고 사람에게는
+    "이 문서로는 답이 안 나온다"로 보였다 — 같은 모델이 다음 질문에서는 라벨을 붙이므로
+    **드문드문** 사라지는 것이 더 나빴다.
+    """
+    raw = "근거: 있음\nMCP 는 외부 시스템 연결을 정한 개방형 프로토콜입니다."
+
+    assert generate._parse_grounded_answer(raw) == "MCP 는 외부 시스템 연결을 정한 개방형 프로토콜입니다."
+
+
+def test_no_grounds_is_still_refused_even_with_a_body():
+    """무르면 안 되는 쪽. `근거: 없음` 이라고 해 놓고 뭔가 더 쓴 경우는 **버린다** —
+    이 판정이 지어낸 답을 막는 유일한 장치다."""
+    raw = "근거: 없음\n하지만 일반적으로는 이렇게 합니다..."
+
+    assert generate._parse_grounded_answer(raw) is None
+
+
+def test_label_wins_over_loose_text():
+    """라벨이 있으면 라벨 뒤만 답변이다. 앞의 군말이 답변에 섞이면 안 된다."""
+    raw = "근거: 있음\n(잠시 생각) 문서를 보면\n답변: 그룹을 먼저 만듭니다."
+
+    assert generate._parse_grounded_answer(raw) == "그룹을 먼저 만듭니다."
+
+
+def test_inline_answer_on_the_ground_line_survives():
+    """`근거: 있음 | 답변: ...` 처럼 한 줄에 붙여 쓰는 모델이 있다 (qwen3.5:4b)."""
+    raw = "근거: 있음 | 답변: MCP 서버는 토큰만 검증합니다."
+
+    assert generate._parse_grounded_answer(raw) == "MCP 서버는 토큰만 검증합니다."
+
+
+def test_garbled_ground_slot_does_not_throw_the_answer_away():
+    """`근거:` 칸에 엉뚱한 말을 쓰는 모델이 있다 (gemma3:1b).
+
+    판정을 "있음이라고 해야 통과"에서 "**없음이라고 하면 버린다**"로 뒤집은 이유다.
+    지어낸 답을 막는 것은 '있음'이라는 글자가 아니라 프롬프트와 모델의 거절 선언이다.
+    """
+    raw = "근거: Host 가 하는 일" + '\\n' + "답변: Host 는 사용자와 LLM 을 만나는 애플리케이션입니다."
+
+    assert generate._parse_grounded_answer(raw) == "Host 는 사용자와 LLM 을 만나는 애플리케이션입니다."
+
+
+def test_the_word_no_grounds_inside_an_answer_is_not_a_refusal():
+    """답변 본문에 '없음'이 들어 있다고 버리면 안 된다."""
+    raw = "근거: 있음 | 답변: 이 항목은 기본값이 없음 으로 표시됩니다."
+
+    assert generate._parse_grounded_answer(raw) == "이 항목은 기본값이 없음 으로 표시됩니다."
+
+
+def test_copying_the_format_options_is_not_a_refusal():
+    """`근거: 있음 | 없음` — 형식 설명의 선택지를 모델이 그대로 따라 쓴 경우.
+
+    2026-09-01 에 `qwen3.5:4b` 로 6회 중 1회 이렇게 나왔고, '없음'을 판정으로 읽어 멀쩡한
+    답을 버렸다. 선택지를 그대로 옮긴 것은 판정이 아니므로 본문 유무로 판단한다.
+    """
+    raw = """근거: 있음 | 없음
+답변: Host 는 사용자와 LLM 을 만나는 애플리케이션입니다."""
+
+    assert generate._parse_grounded_answer(raw) == "Host 는 사용자와 LLM 을 만나는 애플리케이션입니다."
+
+
+# ── 변형 질문의 어투 (2026-10-06) ────────────────────────────────────────────
+
+
+def test_variants_keep_the_ones_that_only_differ_by_ending():
+    """말끝만 다른 변형이 **중복으로 걸러지면 안 된다.**
+
+    사용자는 `api등록절차 검색해줘` 처럼 친다. 그 어투가 인덱스에 없으면 0.880 에 머물러
+    임계값(0.90)을 못 넘고 검수된 답변이 안 나간다 — 같은 낱말에 말끝만 바꾼 변형이
+    들어가면 0.905 로 넘는다(2026-10-06 측정). 중복 판정이 어미까지 지우면 이 장치가
+    통째로 죽는데, 죽어도 예외는 안 나고 **적중률만 조용히 떨어진다.**
+    """
+    from app.studio.generate import make_variants
+
+    class Llm:
+        model = "fake"
+
+        def chat(self, prompt, system=None, json_format=False, think=False, on_think=None):
+            return "\n".join([
+                "API 등록 절차",
+                "API 등록 절차 알려줘",
+                "API 등록 절차 검색해줘",
+                "API 등록 방법 뭐야",
+            ])
+
+    variants = make_variants(Llm(), "API 등록 절차가 어떻게 되나요", 10)
+
+    assert len(variants) == 4, f"말끝만 다른 변형이 걸러졌습니다: {variants}"
+    assert "API 등록 절차 검색해줘" in variants
+
+
+def test_the_variant_prompt_asks_for_how_people_actually_type():
+    """생성 프롬프트가 **어투**를 요구해야 한다.
+
+    모델은 가만두면 낱말을 바꾼다(절차 → 방법·과정·순서). 그러면 어투만 거친 질문은 여전히
+    못 잡는다 — 핵심 낱말을 그대로 두고 말끝만 바꾼 것을 따로 요구해야 한다(측정: 그 규칙을
+    넣기 전 0.885, 넣은 뒤 0.905).
+    """
+    from app.studio.generate import _VARIANT_PROMPT
+
+    assert "요청·명령형" in _VARIANT_PROMPT, "명령형 어투를 요구하지 않습니다"
+    assert "말끝만" in _VARIANT_PROMPT, "핵심 낱말을 그대로 두라는 규칙이 없습니다"
+    assert "검색해줘" in _VARIANT_PROMPT, "사람들이 실제로 치는 표현의 예가 없습니다"
+
+
+# ── 배치가 프로젝트를 들고 가는가 (2026-10-06) ───────────────────────────────
+
+
+def test_the_generation_thread_keeps_the_project(monkeypatch, isolated_data):
+    """생성은 **별도 스레드**에서 돈다. 그 안에서도 고른 프로젝트를 봐야 한다.
+
+    파이썬 스레드는 ContextVar 를 물려받지 않는다. 그냥 띄우면 작업 스레드에서는
+    프로젝트가 비어 **기본 팩(`data/`)의 문서로** 생성하고 결과만 고른 프로젝트에 쌓인다.
+    2026-10-06 에 실제로 그랬다 — `mcp-manager` 에 API Manager 문서로 만든 QA 60건이
+    들어갔고 **오류는 하나도 나지 않았다.** 사람이 출처를 하나씩 들여다보고서야 알았다.
+    """
+    from app.core import config
+    from app.studio import runner
+
+    seen: list[str] = []
+
+    def spy(doc_ids, **kwargs):
+        from app.studio.generate import GenerationOutcome, GenerationStats
+
+        seen.append(config.current_project())
+        return GenerationOutcome(stats=GenerationStats(source="docs"))
+
+    monkeypatch.setattr("app.studio.runner.generate_from_docs", spy)
+
+    token = config.use_project("mcp-manager")
+    try:
+        job = runner.get_job()
+        job.start(source="docs", doc_ids=["아무문서"], questions=[], category_id=None,
+                  question_model="fake", answer_model="fake", judge_model="",
+                  items_per_chunk=1, variant_count=1, max_items=1)
+        job.join(timeout=10)
+    finally:
+        config.reset_project(token)
+
+    assert seen == ["mcp-manager"], f"작업 스레드가 본 프로젝트: {seen}"
+
+
+def test_the_answer_prompt_forbids_notes_to_self():
+    """`(확인 필요)` 같은 메모가 답변에 들어가면 **그대로 사용자에게 나갑니다.**
+
+    2026-10-06~07 에 생성한 76건 중 두 건에서 실제로 나왔고, 채점 모델은 둘 다 통과시켰습니다
+    (`사내 MCP 관리 포털을 통해 수행됩니다. (확인 필요)`). 사람이 읽어서 걸렀습니다.
+    """
+    from app.studio.generate import _ANSWER_PROMPT
+
+    assert "(확인 필요)" in _ANSWER_PROMPT, "메모를 적지 말라는 규칙이 없습니다"
+    assert "지어내지 마세요" in _ANSWER_PROMPT

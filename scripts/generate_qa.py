@@ -8,6 +8,7 @@
     python scripts/generate_qa.py --category api_reg_flow  # 추천 질문에 답 붙이기
     python scripts/generate_qa.py --max 10 --variants 12
     python scripts/generate_qa.py --apply                  # 초안을 pending 으로 반영
+    python scripts/generate_qa.py --project mcp-manager    # 그 프로젝트의 문서로
 
 `--apply` 를 줘도 **`pending` 까지만** 들어간다. 승인은 사람이 검수 화면에서 한다.
 Ctrl+C 로 멈추면 그때까지 만든 초안은 `data/generated_qa.json` 에 남는다.
@@ -25,12 +26,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.core.categories import find_category, load_categories   # noqa: E402
+from app.core import config                                      # noqa: E402
 from app.core.config import get_settings, is_studio              # noqa: E402
 from app.studio import runner                                    # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="문서에서 QA 초안을 생성합니다.")
+    parser.add_argument("--project", default="", help="프로젝트 id (비우면 기본 팩)")
     parser.add_argument("--docs", nargs="*", default=[], help="문서 ID 목록(비우면 전체)")
     parser.add_argument("--category", default=None, help="카테고리 ID — 추천 질문에 답변을 붙입니다")
     parser.add_argument("--model", default=None, help="질문·답변 모두 이 모델로(역할 분리 없이)")
@@ -47,6 +50,17 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
+    # 프로젝트를 먼저 세운다. 이 뒤의 모든 경로(문서·초안·QA 인덱스)가 그 팩을 가리킨다 —
+    # 안 세우면 `packs/` 가 아니라 기본 팩(`data/`)에 초안이 쌓인다.
+    token = config.use_project(args.project) if args.project else None
+    try:
+        return _run(args)
+    finally:
+        if token is not None:
+            config.reset_project(token)
+
+
+def _run(args: argparse.Namespace) -> int:
     settings = get_settings()
 
     if not is_studio():

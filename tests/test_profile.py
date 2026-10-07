@@ -62,9 +62,10 @@ def test_chat_page_uses_profile(client, isolated_data):
 
     assert ">ACME</span>" in html
     assert "사내 도우미" in html
-    assert "주문 · 배송 문의" in html
+    # `service_desc` 는 챗봇 머리에서 빠졌다(재설계 13) — 프로젝트 이름이 서재 선택기에
+    # 보이므로 머리에 한 줄 더 두지 않는다. 관리자 화면에는 그대로 있다.
     # 마크업(클래스·구조)은 그대로여야 한다 — 퍼블 산출물을 다시 받았을 때 배선이 남아야 한다.
-    assert 'class="chat_logo" data-brand="{organization}"' in html
+    assert 'data-brand="{organization}"' in html, "로고 자리의 배선이 사라졌습니다"
     assert "KT" not in html
 
 

@@ -16,9 +16,22 @@ services:
     container_name: openapi-chat-serve
     restart: unless-stopped
     ports:
-      - "127.0.0.1:18100:18100"
+      # 기본은 **같은 기계에서만** 열립니다. 사내에서 바로 쓰려면 띄울 때
+      # `BIND=0.0.0.0` 을 주세요(개발 서버가 그렇게 돌고 있습니다).
+      - "${BIND:-127.0.0.1}:18100:18100"
     environment:
-      APP_MODE: serve
+      # ★ 모드는 "이 기계에 GPU 가 있나"가 아니라 **"이 설치가 LLM 을 쓰나"** 입니다.
+      # 개발 서버는 같은 사내망의 AI 테스트 PC 를 보므로 `studio` 입니다
+      # (.env.server.example 참고). `serve` 면 OLLAMA_HOST 를 맞춰도 AI 답변이 막힙니다.
+      APP_MODE: ${APP_MODE:-serve}
+      # 비우면 localhost 를 봅니다 — 컨테이너 안의 localhost 라 아무것도 없습니다.
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://localhost:11434}
+      OLLAMA_ANSWER_MODEL: ${OLLAMA_ANSWER_MODEL:-}
+      OLLAMA_QUESTION_MODEL: ${OLLAMA_QUESTION_MODEL:-}
+      OLLAMA_JUDGE_MODEL: ${OLLAMA_JUDGE_MODEL:-}
+      # 서버에서는 **검수된 답변이 기본**입니다. AI 테스트 PC 가 꺼지면 AI 답변만 멈추고
+      # 검수 답변은 그대로 나가야 합니다.
+      AI_ANSWER_DEFAULT: ${AI_ANSWER_DEFAULT:-false}
       # 반드시 바꿔서 주입한다. 기본값이면 기동 로그에 경고가 남는다.
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD 를 지정하세요}
@@ -35,3 +48,11 @@ services:
       # 그냥 되지만, 리눅스는 호스트 권한이 그대로 넘어간다. 안 맞추면 조회는 되는데
       # 질문 이력·승인·설정 저장이 **조용히** 실패한다.
       - ./data:/app/data
+      # ★ **프로젝트를 쓰면 이 둘도 반드시 붙여야 합니다.**
+      #
+      # 자료·카테고리·QA 는 `packs/<프로젝트>/` 에, 질문 이력·벡터는 `var/<프로젝트>/`
+      # 에 있습니다(app/core/config.py). `data/` 만 붙이면 서버에서 **프로젝트가 0개**가
+      # 되어 기본 팩 하나로 떨어집니다 — 승인해 둔 QA 가 통째로 안 보입니다.
+      # 오류는 나지 않습니다. 빈 화면만 남습니다.
+      - ./packs:/app/packs
+      - ./var:/app/var

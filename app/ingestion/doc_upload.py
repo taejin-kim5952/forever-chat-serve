@@ -12,6 +12,10 @@
 
 한 파일이 실패해도 나머지는 계속 등록한다. 40건 중 1건이 깨졌다고 전부 되돌리면, 고쳐서 다시
 올릴 때 이미 들어간 39건을 또 처리하게 된다.
+
+**원본 파일(`.pptx` · `.pdf` …)도 같은 경로로 받는다.** 색인하지 않고 `raw_docs/files/` 에
+보관만 하며(`doc_files.py`), 같은 이름의 `.md` 와 자동으로 한 건이 된다. 화면이 끌어다 놓은
+것을 종류별로 나눠 보내지 않아도 되도록 입구를 하나로 뒀다 — 사람은 파일을 한 번에 집는다.
 """
 
 import re
@@ -23,6 +27,7 @@ import frontmatter
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, log_event
+from app.ingestion import doc_files
 
 logger = get_logger("ingestion.doc_upload")
 
@@ -52,7 +57,7 @@ class UploadResult:
     path: str
     doc_id: str = ""
     title: str = ""
-    # created  : 새로 등록  · updated : 같은 ID를 덮어씀
+    # created  : 새로 등록  · updated : 같은 ID를 덮어씀 · attached : 원본만 보관(색인 없음)
     # skipped  : 등록하지 않음(사유 있음) · failed : 등록하려다 실패
     status: str = "skipped"
     chunks: int = 0
@@ -106,26 +111,36 @@ def register_uploads(items: list[UploadItem], *, index, overwrite: bool = False)
     docs_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[UploadResult] = []
-    seen: dict[str, str] = {}   # doc_id → 이 묶음에서 먼저 온 파일 경로
+    # doc_id → 이 묶음에서 먼저 온 파일 경로. 본문과 원본은 짝이므로 **따로** 센다.
+    seen: dict[str, str] = {}
+    seen_files: dict[str, str] = {}
 
     for item in items:
         result = UploadResult(path=item.path)
         results.append(result)
 
         suffix = Path(PurePosixPath(item.path.replace("\\", "/")).name).suffix.lower()
-        if suffix not in ALLOWED_SUFFIXES:
-            result.reason = "문서 파일이 아닙니다 (.md · .markdown · .txt 만 등록합니다)"
-            continue
-
         doc_id = doc_id_from_filename(item.path)
         if not doc_id:
             result.reason = "파일 이름에서 문서 ID를 만들 수 없습니다"
             continue
         result.doc_id = doc_id
+        result.title = doc_id
 
         if not item.data:
             result.reason = "빈 파일입니다"
             continue
+
+        if suffix in doc_files.ALLOWED_SUFFIXES:
+            _attach_original(item, result, suffix, seen_files, overwrite=overwrite)
+            continue
+        if suffix not in ALLOWED_SUFFIXES:
+            result.reason = (
+                "등록할 수 없는 형식입니다 "
+                "(본문은 .md · .markdown · .txt, 원본은 pdf · ppt · doc · xls · hwp · zip · 이미지)"
+            )
+            continue
+
         if len(item.data) > MAX_FILE_BYTES:
             result.reason = f"파일이 너무 큽니다 (최대 {MAX_FILE_BYTES // 1000}KB)"
             continue
@@ -182,7 +197,42 @@ def register_uploads(items: list[UploadItem], *, index, overwrite: bool = False)
         files=len(items),
         created=sum(1 for r in results if r.status == "created"),
         updated=sum(1 for r in results if r.status == "updated"),
+        attached=sum(1 for r in results if r.status == "attached"),
         skipped=sum(1 for r in results if r.status == "skipped"),
         failed=sum(1 for r in results if r.status == "failed"),
     )
     return results
+
+
+def _attach_original(item: UploadItem, result: UploadResult, suffix: str,
+                     seen: dict[str, str], *, overwrite: bool) -> None:
+    """원본 파일을 보관만 한다. 색인하지 않으므로 `chunks` 는 0 으로 남는다.
+
+    **`.md` 가 없어도 받는다.** 그 문서는 목록에 `색인 안 됨` 으로 뜨고 검색에 걸리지
+    않는다 — 받지 않고 거절하면 "왜 안 올라가지"가 되고, 조용히 받아 두면 "올렸는데 AI가
+    모른다"가 된다. 둘 다 나쁘므로 **받고 눈에 보이게** 한다.
+    """
+    doc_id = result.doc_id
+    if len(item.data) > doc_files.MAX_ORIGINAL_BYTES:
+        result.reason = f"원본 파일이 너무 큽니다 (최대 {doc_files.MAX_ORIGINAL_BYTES // 1_000_000}MB)"
+        return
+    # 묶음 안의 중복은 **파일 이름**으로 본다. 문서 ID로 보면 `가이드.pptx` 와 `가이드.pdf`
+    # 처럼 한 본문에 묶일 원본 둘을 함께 올릴 수가 없다(둘 다 받는 것이 지금 규칙이다).
+    stored = f"{doc_id}{suffix.lower()}"
+    if stored in seen:
+        result.reason = f"이 묶음의 '{seen[stored]}' 와 파일 이름이 같습니다"
+        return
+    seen[stored] = item.path
+
+    if doc_files.exists(f"{doc_id}{suffix.lower()}") and not overwrite:
+        result.reason = "같은 이름의 원본이 이미 있습니다 (덮어쓰기를 켜면 갱신합니다)"
+        return
+
+    try:
+        doc_files.save(doc_id, suffix, item.data)
+    except OSError as exc:
+        result.status = "failed"
+        result.reason = f"원본을 저장하지 못했습니다: {exc}"
+        return
+
+    result.status = "attached"

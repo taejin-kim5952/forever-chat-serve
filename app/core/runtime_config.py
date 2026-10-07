@@ -38,14 +38,41 @@ def _path() -> Path:
 
 
 def _defaults() -> RuntimeConfig:
+    """기본값. **팩이 제안한 값이 코드 기본값을 덮는다.**
+
+    도메인마다 어휘가 달라 유사도 분포가 통째로 이동한다 — 임계값을 코드에 고정해 두면
+    새 도메인에서 답변율이 급락하거나 오매칭이 는다 (계획서 §2.3). 그래서 팩이 자기 값을
+    들고 다닌다.
+
+    다만 이것은 **기본값일 뿐**이다. 운영 중 관리자가 화면에서 조정한 값(`runtime_config.json`)이
+    있으면 그쪽이 이긴다 — 화면에서 내린 판단을 팩 배포가 되돌리면 안 된다.
+    """
     s = get_settings()
-    return RuntimeConfig(
-        qa_match_threshold=s.qa_match_threshold,
-        related_docs_floor=s.related_docs_floor,
-        related_docs_count=s.related_docs_count,
-        qa_top_k=s.qa_top_k,
-        doc_top_k=s.doc_top_k,
-    )
+    values = {
+        "qa_match_threshold": s.qa_match_threshold,
+        "related_docs_floor": s.related_docs_floor,
+        "related_docs_count": s.related_docs_count,
+        "qa_top_k": s.qa_top_k,
+        "doc_top_k": s.doc_top_k,
+    }
+    for key, value in _pack_matching().items():
+        if value is not None:
+            values[key] = value
+    return RuntimeConfig(**values)
+
+
+def _pack_matching() -> dict:
+    """`pack.json` 의 matching 절. 팩이 없거나 깨져 있으면 빈 값이다.
+
+    **여기서 터지면 안 된다.** 잘못된 팩은 기동 때 `load_pack()` 이 막을 몫이고,
+    이 함수는 매 질문이 지나가는 길목에 있다.
+    """
+    try:
+        from app.core.pack import load_pack
+
+        return load_pack().matching.model_dump()
+    except Exception:  # noqa: BLE001 - 임계값 하나로 검색이 멈추면 안 된다
+        return {}
 
 
 def load_runtime_config() -> RuntimeConfig:

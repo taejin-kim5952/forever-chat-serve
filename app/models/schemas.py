@@ -3,7 +3,9 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 # 화면의 응답 상태와 1:1이다 — 퍼블 요청서 4번의 result_type.
-ResultType = Literal["answer", "related_docs", "unresolved"]
+# live_answer 는 검수된 답변이 아니라 **지금 조회한 값**이다.
+# 화면이 조회 시각 배지를 함께 그려야 한다 (개발계획서 §4.2).
+ResultType = Literal["answer", "live_answer", "related_docs", "unresolved"]
 
 
 # ─────────────────────────────────────────────────────────── 챗봇
@@ -17,6 +19,13 @@ class AskRequest(BaseModel):
     channel: str = "web"
     # 화면에서 고른 주제. 라벨은 서버가 id 로 다시 찾으므로 받지 않는다.
     category_id: Optional[str] = None
+    # 사이트 위젯이 실어 보내는 **지금 보고 있는 화면** (개발계획서 §5.7).
+    #
+    # 이것이 있으면 질문에 서버 이름을 적지 않아도 대상을 안다 — 검증 화면에서
+    # "왜 안 되나요" 만 쳐도 그 Version 을 짚는다. 위젯의 값어치가 여기서 나온다.
+    #
+    #   {"route": "verify", "serverId": 6, "versionId": 7}
+    context: Optional[dict] = None
 
 
 class SourceDoc(BaseModel):
@@ -36,6 +45,13 @@ class RelatedDoc(BaseModel):
     similarity: float = 0.0
 
 
+class LiveAction(BaseModel):
+    """라이브 답변에 붙는 사이트 딥링크. 챗봇이 답만 하고 끝내지 않게 한다."""
+
+    label: str
+    url: str
+
+
 class AskResponse(BaseModel):
     result_type: ResultType
     # result_type == 'answer' 일 때만 채워진다.
@@ -47,10 +63,44 @@ class AskResponse(BaseModel):
     message: Optional[str] = None
     ticket_id: Optional[str] = None
 
+    # result_type == 'live_answer' 일 때만 채워진다 (개발계획서 §4).
+    #
+    # `fetched_at` 을 반드시 함께 낸다 — 언제 기준인지 밝히지 않으면 사용자가
+    # 캐시된 값을 현재값으로 믿는다.
+    fetched_at: Optional[str] = None
+    source_label: Optional[str] = None
+    actions: list[LiveAction] = Field(default_factory=list)
+    stale: bool = False
+
     similarity: Optional[float] = None
     matched_qa_id: Optional[str] = None
     response_time_ms: int = 0
     log_id: Optional[str] = None
+
+
+class StudioAskRequest(BaseModel):
+    question: str
+    category_id: Optional[str] = None
+
+
+class StudioAskResponse(BaseModel):
+    """챗봇의 `AI 답변` 스위치가 켜졌을 때의 응답 — **studio 전용**.
+
+    `AskResponse` 와 일부러 나눴다. 운영 응답에 검수되지 않은 답변이 실릴 수 있는 모양을
+    만들면, 언젠가 그 필드가 운영 경로로 흘러 들어간다. 화면도 두 응답을 다르게 그린다 —
+    이쪽에는 `담당자 검수 완료` 표시가 붙지 않는다.
+    """
+
+    result_type: Literal["ai_answer", "related_docs", "unresolved"]
+    # result_type == 'ai_answer' 일 때만 채워진다. 검수 전 답변이다.
+    answer: Optional[str] = None
+    # 답을 만들었든 못 만들었든 **근거로 삼은 문서를 항상 함께 낸다.**
+    # 사람이 답을 확인할 수 있어야 검수 도구로 쓸모가 있다.
+    related_docs: list[RelatedDoc] = Field(default_factory=list)
+    message: Optional[str] = None
+    model: str = ""
+    similarity: Optional[float] = None
+    response_time_ms: int = 0
 
 
 class FeedbackRequest(BaseModel):
@@ -164,6 +214,10 @@ class DocSummary(BaseModel):
     updated: str = ""
     chunk_count: int = 0
     linked_qa_count: int = 0
+    # 원본 파일이 함께 올라와 있으면 그 종류(`ppt`·`pdf`…)와 크기. 없으면 빈 값.
+    file_kind: str = ""
+    file_name: str = ""
+    file_bytes: int = 0
 
 
 class DocDetail(BaseModel):
@@ -186,12 +240,30 @@ class DocSaveResponse(BaseModel):
     status: str
 
 
+class DocBulkDeleteRequest(BaseModel):
+    doc_ids: list[str] = Field(default_factory=list)
+
+
+class DocBulkDeleteItem(BaseModel):
+    doc_id: str
+    status: Literal["deleted", "failed"]
+    # 실패 사유. 화면이 문구를 만들지 않고 그대로 보여준다.
+    reason: str = ""
+
+
+class DocBulkDeleteResponse(BaseModel):
+    items: list[DocBulkDeleteItem] = Field(default_factory=list)
+    deleted: int = 0
+    failed: int = 0
+
+
 class DocUploadItemResult(BaseModel):
     # 화면이 보낸 경로 그대로. 결과 표에서 사람이 자기 폴더의 파일을 찾아야 한다.
     path: str
     doc_id: str = ""
     title: str = ""
-    status: Literal["created", "updated", "skipped", "failed"]
+    # attached : 원본 파일만 보관(색인하지 않음)
+    status: Literal["created", "updated", "attached", "skipped", "failed"]
     chunks: int = 0
     # skipped/failed 의 사유. 화면이 문구를 만들지 않고 그대로 보여준다.
     reason: str = ""
@@ -201,6 +273,7 @@ class DocUploadResponse(BaseModel):
     items: list[DocUploadItemResult] = Field(default_factory=list)
     created: int = 0
     updated: int = 0
+    attached: int = 0
     skipped: int = 0
     failed: int = 0
 

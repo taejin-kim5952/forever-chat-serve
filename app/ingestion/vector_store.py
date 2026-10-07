@@ -29,7 +29,7 @@ from app.core.logging import get_logger, log_event
 logger = get_logger("ingestion.vector_store")
 
 _LOCK = threading.Lock()
-_CLIENT: chromadb.ClientAPI | None = None
+_CLIENTS: dict[str, chromadb.ClientAPI] = {}
 
 _EMBED_MODEL_KEY = "embed_model"
 
@@ -39,22 +39,24 @@ class EmbedModelMismatch(RuntimeError):
 
 
 def get_client() -> chromadb.ClientAPI:
-    """Chroma 클라이언트는 프로세스당 하나만 둔다 — 같은 디렉터리를 여러 번 열면
-    파일 잠금이 부딪친다."""
-    global _CLIENT
+    """저장 폴더마다 클라이언트 하나. **같은 디렉터리를 두 번 열면 파일 잠금이 부딪친다.**
+
+    프로젝트가 여럿이면 폴더도 여럿이라(`var/<프로젝트>/chroma`) 클라이언트도 그만큼 둔다.
+    폴더가 다르면 잠금이 겹치지 않는다.
+    """
+    persist_dir = get_settings().chroma_persist_dir
     with _LOCK:
-        if _CLIENT is None:
-            persist_dir = get_settings().chroma_persist_dir
+        found = _CLIENTS.get(persist_dir)
+        if found is None:
             Path(persist_dir).mkdir(parents=True, exist_ok=True)
-            _CLIENT = chromadb.PersistentClient(path=persist_dir)
-        return _CLIENT
+            found = _CLIENTS[persist_dir] = chromadb.PersistentClient(path=persist_dir)
+        return found
 
 
 def reset_client() -> None:
     """테스트에서 설정을 바꿔 끼울 때 쓴다."""
-    global _CLIENT
     with _LOCK:
-        _CLIENT = None
+        _CLIENTS.clear()
 
 
 def embed_model_name() -> str:

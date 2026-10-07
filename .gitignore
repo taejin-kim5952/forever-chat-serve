@@ -22,3 +22,21 @@ data/runtime_config.json
 
 # 임베딩 모델(ONNX) — 565MB. 저장소에 넣지 않고 scripts/fetch_onnx_model.py 로 받습니다.
 models/
+
+# 프로젝트별 자료와 그 파생물 — **코드가 아니라 내용물**입니다 (2026-10-07).
+#
+#   packs/<프로젝트>/   문서 · 카테고리 · 검수한 QA · 프로필
+#   var/<프로젝트>/     질문 이력 · 벡터 인덱스
+#
+# git 에 넣지 않는 이유: 검수는 **운영에서 쌓입니다.** 코드와 함께 버전 관리하면 배포할
+# 때마다 서버에서 승인한 것이 PC 것으로 덮이고, 누가 누구를 덮었는지 아무도 모르게 됩니다.
+#
+# 서버로 옮기는 길은 따로 있습니다:
+#   처음 한 번   scp -r packs/ 서버:/경로/packs/
+#   그다음부터   python scripts/push_qa.py --server http://서버:18100 --file ... --apply
+#                (서버에 들어갈 때 무조건 pending 이 됩니다 — 사람이 다시 승인합니다)
+packs/
+var/
+
+# pack 내보내기 결과(scripts/pack_export.py). packs/ 를 zip 으로 묶은 것이라 같은 내용물입니다.
+dist/

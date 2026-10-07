@@ -18,6 +18,41 @@ logger = get_logger("api.admin_settings")
 router = APIRouter(prefix="/api/admin", tags=["admin-settings"], dependencies=[Depends(require_admin)])
 
 
+@router.get("/pack")
+def get_pack() -> dict:
+    """이 설치가 어떤 팩으로 떠 있는가 (계획서 §5.6 관리자 팩 정보 탭).
+
+    **팩이 잘못됐으면 서버가 아예 안 떠 있다** — 기동 때 막기 때문이다. 그래서 여기서는
+    실패를 다루지 않고 지금 값을 보여주기만 한다.
+
+    문서·QA 건수를 함께 세는 이유는, 팩을 갈아끼운 뒤 "반입은 됐는데 색인을 안 돌렸다" 를
+    이 화면에서 바로 알아채기 위해서다.
+    """
+    from pathlib import Path
+
+    from app.core.jsonstore import read_json
+    from app.core.pack import ENGINE_VERSION, load_pack
+
+    settings = get_settings()
+    pack = load_pack()
+
+    qa = read_json(Path(settings.qa_index_file), default={})
+    items = qa.get("items", qa if isinstance(qa, list) else [])
+    docs = list(Path(settings.raw_docs_dir).glob("*.md")) if Path(settings.raw_docs_dir).is_dir() else []
+
+    return {
+        "pack_id": pack.pack_id or None,
+        "pack_version": pack.pack_version or None,
+        "engine_version": ENGINE_VERSION,
+        "engine_min_version": pack.engine_min_version or None,
+        "pack_dir": settings.pack_dir,
+        "var_dir": settings.var_dir,
+        "doc_count": len(docs),
+        "qa_count": len(items),
+        "routes": pack.routes,
+    }
+
+
 @router.get("/mode", response_model=ModeResponse)
 def mode() -> ModeResponse:
     """화면이 <body data-mode> 를 정하고 탭을 감추는 데 쓴다."""

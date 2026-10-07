@@ -521,6 +521,17 @@ $(function(){
     $r.append($('<input type="text" class="admin_input admin_pn_name" data-f="name" placeholder="이름 (예: 기획자)">').val(p.name || ''));
     $r.append($('<input type="text" class="admin_input admin_pn_title" data-f="title" placeholder="한 줄 소개 (예: 서비스 기획)">').val(p.title || ''));
     $r.append($('<textarea class="admin_input admin_pn_prompt" data-f="prompt" rows="2" placeholder="무엇을 먼저 보는 사람인지 적어 주세요. 예) 사용자가 겪는 문제와 쓰임새를 먼저 봅니다."></textarea>').val(p.prompt || ''));
+    /* 역할마다 잘하는 모델이 다릅니다. 비우면 설치 기본 답변 모델을 씁니다. */
+    var $m = $('<select class="admin_select admin_pn_model" data-f="model">')
+      .append($('<option value="">').text('기본 모델'));
+    PN_MODELS.forEach(function(name){ $m.append($('<option>').val(name).text(name)); });
+    /* 저장해 둔 모델이 지금 목록에 없을 수 있습니다(Ollama 에서 지웠거나 다른 PC).
+       그때도 **값을 잃지 않게** 그 이름을 목록에 넣어 둡니다. */
+    if(p.model && PN_MODELS.indexOf(p.model) < 0){
+      $m.append($('<option>').val(p.model).text(p.model + ' (지금 없음)'));
+    }
+    $m.val(p.model || '');
+    $r.append($m);
     $r.append($('<label class="admin_switch admin_pn_on">')
       .append($('<input type="checkbox" data-f="enabled">').prop('checked', p.enabled !== false))
       .append($('<span>')));
@@ -528,7 +539,17 @@ $(function(){
     return $r;
   }
 
+  var PN_MODELS = [];
+
   function renderPersonas(){
+    /* 모델 목록은 **운영에서 빈 목록**입니다(LLM 이 없습니다). 그때는 '기본 모델' 하나만
+       남고, 고르는 칸이 비어 보이지 않습니다. */
+    $.get('/api/models').done(function(list){
+      PN_MODELS = (list || []).map(function(m){ return m.name; });
+    }).always(function(){ pnLoad(); });
+  }
+
+  function pnLoad(){
     API.get('/api/admin/personas').done(function(r){
       var items = (r && r.personas) || [];
       $('#pnMax').text(r.max_in_meeting || 6);
@@ -559,6 +580,7 @@ $(function(){
         name: $.trim($r.find('[data-f="name"]').val()),
         title: $.trim($r.find('[data-f="title"]').val()),
         prompt: $.trim($r.find('[data-f="prompt"]').val()),
+        model: $r.find('[data-f="model"]').val() || '',
         enabled: $r.find('[data-f="enabled"]').prop('checked')
       };
     }).get();
@@ -568,7 +590,7 @@ $(function(){
     }
     saveState('pn', 'saving');
     API.send('PUT', '/api/admin/personas', { personas: items })
-      .done(function(){ saveState('pn', 'ok'); toast('참가자를 저장했습니다', 'ok'); renderPersonas(); })
+      .done(function(){ saveState('pn', 'ok'); toast('참가자를 저장했습니다', 'ok'); pnLoad(); })
       .fail(function(xhr){ saveState('pn', 'err'); toast(apiError(xhr, '저장하지 못했습니다'), 'err'); });
   });
 

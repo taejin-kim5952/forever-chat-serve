@@ -1323,7 +1323,9 @@
       el.className = 'mt_turn' + (t.text ? '' : ' is_fail');
       el.innerHTML = '<div class="mt_who"><b>' + esc(t.name) + '</b>' +
         (t.title ? '<i>' + esc(t.title) + '</i>' : '') +
-        '<span class="mt_round">' + t.round + '바퀴</span></div>' +
+        /* 참가자마다 모델이 다를 수 있습니다. 어느 모델이 말한 것인지 보여야 답의
+           성격이 다른 이유를 짚을 수 있습니다. */
+        '<span class="mt_round">' + (t.model ? esc(t.model) + ' · ' : '') + t.round + '바퀴</span></div>' +
         '<div class="mt_text">' + (t.text ? md(t.text) : '<span class="muted">말하지 못했습니다.</span>') + '</div>';
       $('mtTurns').appendChild(el);
       var next = mtNextName(t);

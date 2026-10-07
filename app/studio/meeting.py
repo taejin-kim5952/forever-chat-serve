@@ -99,8 +99,20 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
     **예외를 밖으로 내지 않는다.** 한 사람이 실패해도 회의는 이어지고, 그 자리는 '말하지
     못했다'로 남는다. 모델이 하나 죽었다고 회의 전체가 사라지면 앞의 발언까지 잃는다.
     """
-    llm = StudioLlm(model=model or None)
-    context = build_context(hits, budget=llm.source_budget_chars()) if hits else ""
+    # 참가자마다 모델이 다를 수 있다. **발췌는 한 번만 만든다** — 모델마다 다시 자르면
+    # 같은 회의에서 사람마다 다른 분량을 보게 되고, 그때 대화가 어긋나는 이유를 알 수 없다.
+    # 예산은 기본 모델 기준으로 잡는다.
+    base = StudioLlm(model=model or None)
+    context = build_context(hits, budget=base.source_budget_chars()) if hits else ""
+    llms: dict[str, StudioLlm] = {}
+
+    def _llm(name: str) -> StudioLlm:
+        """같은 모델은 한 번만 만든다. 참가자 넷이 같은 모델이면 객체도 하나다."""
+        if not name:
+            return base
+        if name not in llms:
+            llms[name] = StudioLlm(model=name)
+        return llms[name]
     source_note = ("아래 발췌는 이 프로젝트의 자료에서 주제로 찾은 것입니다."
                    if hits else "**이 주제로 찾은 자료가 없습니다.** 아는 것처럼 말하지 마세요.")
 
@@ -114,8 +126,11 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
                 prompt=persona.prompt or "맡은 자리에서 보이는 것을 말합니다.",
                 limit=MAX_TURN_CHARS,
             )
+            # 화면이 **누가 어느 모델로 말했는지** 보여 줄 수 있어야 한다. 섞어 쓰면
+            # 답의 성격이 달라지는데, 어느 모델이 말한 것인지 모르면 비교가 안 된다.
+            speaker = _llm(persona.model if not model else "")
             try:
-                text = llm.chat(prompt, system=qa_rules()).strip()
+                text = speaker.chat(prompt, system=qa_rules()).strip()
             except Exception as exc:          # noqa: BLE001 - 한 사람이 죽어도 회의는 이어진다
                 log_event(logger, "meeting turn failed", persona=persona.persona_id,
                           error=str(exc))
@@ -123,6 +138,7 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
             turn = {
                 "persona_id": persona.persona_id, "name": persona.name,
                 "title": persona.title, "round": round_no, "text": text,
+                "model": speaker.model,
             }
             if text:
                 turns.append(turn)
@@ -131,9 +147,10 @@ def run(topic: str, personas: list[Persona], hits: list[dict], rounds: int = 1,
     if not turns:
         return
     try:
-        summary = llm.chat(_SUMMARY_PROMPT.format(topic=topic, history=_history(turns)),
-                           system=qa_rules()).strip()
+        # 정리는 **기본 모델**이 한다. 참가자 한 명의 모델로 하면 그 사람 말투로 정리된다.
+        summary = base.chat(_SUMMARY_PROMPT.format(topic=topic, history=_history(turns)),
+                            system=qa_rules()).strip()
     except Exception as exc:                  # noqa: BLE001
         log_event(logger, "meeting summary failed", error=str(exc))
         summary = ""
-    yield "summary", {"text": summary, "model": llm.model}
+    yield "summary", {"text": summary, "model": base.model}

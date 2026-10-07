@@ -38,6 +38,8 @@ class PersonaIn(BaseModel):
     name: str
     title: str = ""
     prompt: str = ""
+    # 비우면 설치 기본 답변 모델을 쓴다.
+    model: str = ""
     enabled: bool = True
 
 
@@ -75,7 +77,8 @@ def save_personas(request: PersonaSaveRequest) -> PersonaListResponse:
         seen.add(pid)
         items.append(personas_mod.Persona(
             persona_id=pid, name=name, title=p.title.strip(),
-            prompt=p.prompt.strip(), enabled=p.enabled, sort=i))
+            prompt=p.prompt.strip(), model=p.model.strip(),
+            enabled=p.enabled, sort=i))
 
     personas_mod.save(personas_mod.PersonaStore(personas=items))
     log_event(logger, "personas updated", count=len(items))

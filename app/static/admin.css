@@ -1338,12 +1338,12 @@ tr.is_open .admin_row_expand{transform:rotate(90deg);color:var(--qr-teal);}
   /* ---------- AI 미팅 참가자 (2026-10-07) ----------
      한 줄에 이름·소개·프롬프트·사용여부를 함께 둡니다. 프롬프트가 가장 길어 그쪽에 자리를
      몰아 줍니다 — 거기가 실제로 결과를 가르는 칸입니다. */
-  .admin_pn{display:grid;grid-template-columns:140px 160px 1fr 48px 28px;gap:8px;align-items:start}
+  .admin_pn{display:grid;grid-template-columns:130px 140px 1fr 150px 48px 28px;gap:8px;align-items:start}
   .admin_pn_prompt{resize:vertical;min-height:52px;line-height:1.6;font-family:inherit}
   .admin_pn_on{align-self:center;justify-self:center}
   .admin_pn .admin_row_x{align-self:center}
   @media (max-width:1100px){
     /* 좁아지면 한 줄에 다 들어가지 않습니다. 프롬프트를 아래로 내립니다. */
-    .admin_pn{grid-template-columns:1fr 1fr 48px 28px}
+    .admin_pn{grid-template-columns:1fr 1fr 150px 48px 28px}
     .admin_pn_prompt{grid-column:1 / -1}
   }

@@ -219,3 +219,70 @@ def test_a_meeting_opens_even_with_no_matching_documents(client, studio, isolate
 
     assert "event: opened" in body
     assert "event: turn" in body
+
+
+# ── 참가자마다 다른 모델 ───────────────────────────────────────────────────
+
+
+def test_each_participant_can_use_a_different_model(client, studio, isolated_data, monkeypatch):
+    """기획자는 qwen, 개발자는 gemma 처럼 **역할마다 다른 모델**을 쓸 수 있어야 한다.
+
+    역할마다 잘하는 모델이 다르다. 비워 두면 설치 기본 모델을 쓴다.
+    """
+    used = []
+
+    class FakeLlm:
+        def __init__(self, model=None):
+            self.model = model or "기본모델"
+
+        def source_budget_chars(self):
+            return 2000
+
+        def chat(self, prompt, system=None, **kw):
+            used.append(self.model)
+            return "한 마디."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", FakeLlm)
+    save(client, [
+        {"name": "기획자", "model": "qwen3.5:4b"},
+        {"name": "개발자", "model": "gemma4:latest"},
+        {"name": "PM"},                               # 비우면 기본
+    ])
+    ids = [p.persona_id for p in personas_mod.enabled()]
+
+    client.get("/api/meeting/stream", params={"topic": "고도화", "personas": ",".join(ids)})
+
+    # 발언 3번 + 정리 1번. 정리는 **기본 모델**이 한다 — 한 참가자의 모델로 하면 그 사람
+    # 말투로 정리된다.
+    assert used[:3] == ["qwen3.5:4b", "gemma4:latest", "기본모델"]
+    assert used[3] == "기본모델"
+
+
+def test_the_turn_says_which_model_spoke(client, studio, isolated_data, monkeypatch):
+    """모델을 섞으면 답의 성격이 달라진다. **어느 모델이 말했는지** 화면이 알아야 한다."""
+    class FakeLlm:
+        def __init__(self, model=None):
+            self.model = model or "기본모델"
+
+        def source_budget_chars(self):
+            return 2000
+
+        def chat(self, prompt, system=None, **kw):
+            return "한 마디."
+
+    monkeypatch.setattr("app.studio.meeting.StudioLlm", FakeLlm)
+    save(client, [{"name": "기획자", "model": "qwen3.5:4b"}])
+    ids = [p.persona_id for p in personas_mod.enabled()]
+
+    body = client.get("/api/meeting/stream",
+                      params={"topic": "고도화", "personas": ",".join(ids)}).text
+
+    assert "qwen3.5:4b" in body
+
+
+def test_the_model_survives_a_save(client, studio, isolated_data):
+    """저장하고 다시 읽어도 고른 모델이 남아 있어야 한다."""
+    save(client, [{"name": "기획자", "model": "qwen3.5:4b"}])
+
+    saved = client.get("/api/admin/personas", headers=AUTH).json()["personas"][0]
+    assert saved["model"] == "qwen3.5:4b"
